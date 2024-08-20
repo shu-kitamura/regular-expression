@@ -1,4 +1,4 @@
-//! define Error struct
+//! エラーの型を定義する
 
 use std::{
     error::Error,
@@ -40,3 +40,21 @@ impl Display for ParseError {
 
 /// エラー用にErrorトレイトを実装
 impl Error for ParseError {} // デフォルト実装を使うだけの場合、これだけでいい
+
+
+/// コード生成エラーを示す型
+#[derive(Debug, PartialEq)]
+pub enum CodeGenError {
+    PCOverFlow,   // コード生成中にオーバーフローが起きた場合のエラー
+    FailStar,     // * のコード生成エラー
+    FailOr,       // | のコード生成エラー
+    FailQuestion, // ? のコード生成エラー
+}
+
+impl Display for CodeGenError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "CodeGenError: {:?}", self)
+    }
+}
+
+impl Error for CodeGenError {}
