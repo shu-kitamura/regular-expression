@@ -1,3 +1,3 @@
 pub mod parser;
 pub mod instruction;
-mod codegen;
+pub mod codegen;

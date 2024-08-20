@@ -1,7 +1,7 @@
 use std::fmt::{self, Display};
 
 /// Instruction型
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum Instruction {
     Char(char),
     Match,
