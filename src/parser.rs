@@ -1,8 +1,9 @@
-//! Parse regular expression.
+//! 正規表現の式をパースするための型・関数
 
 use std::mem::take;
 use crate::error::ParseError;
 
+/// AST の型
 #[derive(Debug, PartialEq)]
 pub enum AST {
     Char(char),
@@ -13,6 +14,7 @@ pub enum AST {
     Seq(Vec<AST>),
 }
 
+/// 限量子(+, *, ?)の型
 #[derive(Debug, PartialEq)]
 enum Qualifier {
     Plus,
@@ -20,7 +22,7 @@ enum Qualifier {
     Question,
 }
 
-/// 特殊文字をエスケープする関数
+/// エスケープ文字から AST を生成
 fn parse_escape(pos: usize, c: char) -> Result<AST, ParseError> {
     match c {
         '\\' | '(' | ')' | '|' | '+' | '*' | '?' => Ok(AST::Char(c)),
@@ -28,6 +30,7 @@ fn parse_escape(pos: usize, c: char) -> Result<AST, ParseError> {
     }
 }
 
+/// 限量子(+, *, ?)から AST を生成
 fn parse_qualifier(qualifier: Qualifier, prev: AST) -> AST{
     match qualifier {
         Qualifier::Plus => AST::Plus(Box::new(prev)),
@@ -36,6 +39,7 @@ fn parse_qualifier(qualifier: Qualifier, prev: AST) -> AST{
     }
 }
 
+/// char から限量子(Qualifier型)を生成
 fn convert_char_to_qualifier(c: char) -> Option<Qualifier> {
     match c {
         '+' => Some(Qualifier::Plus),
@@ -45,7 +49,7 @@ fn convert_char_to_qualifier(c: char) -> Option<Qualifier> {
     }
 }
 
-/// Or(|) を結合された複数の式をASTに変換する関数
+/// Orを含む式から AST を生成
 fn fold_or(mut seq_or: Vec<AST>) -> Option<AST> {
     if seq_or.len() > 1 {
         let mut ast: AST = seq_or.pop().unwrap();
@@ -59,6 +63,7 @@ fn fold_or(mut seq_or: Vec<AST>) -> Option<AST> {
     }
 }
 
+/// 式をパースし、ASTを生成
 pub fn parse(pattern: &str) -> Result<AST, ParseError> {
     let mut seq: Vec<AST> = Vec::new();
     let mut seq_or: Vec<AST> = Vec::new();
@@ -132,7 +137,7 @@ pub fn parse(pattern: &str) -> Result<AST, ParseError> {
     }
 }
 
-// ----- test and try code -----
+// ----- テストコード・試し -----
 
 #[test]
 fn try_take() {
@@ -148,52 +153,49 @@ fn try_take() {
 
 #[test]
 fn test_parse_escape_success() {
-    // テスト対象を実行
-    let actual: AST = parse_escape(0, '\\').unwrap();
     let expect: AST = AST::Char('\\');
 
+    // テスト対象を実行
+    let actual: AST = parse_escape(0, '\\').unwrap();
     assert_eq!(actual, expect);
 }
 
 #[test]
 fn test_parse_escape_failure() {
-    // テスト対象を実行
-    let actual = parse_escape(0, 'a');
     let expect = Err(ParseError::InvalidEscape(0, 'a'));
 
+    // テスト対象を実行
+    let actual = parse_escape(0, 'a');
     assert_eq!(actual, expect);
 }
 
 #[test]
 fn test_parse_qualifier_plus() {
+    let expect: AST = AST::Plus(Box::new(AST::Char('a')));
+
     // テスト対象を実行
     let ast: AST = AST::Char('a');
     let actual: AST = parse_qualifier(Qualifier::Plus, ast);
-
-    let expect: AST = AST::Plus(Box::new(AST::Char('a')));
-
     assert_eq!(actual, expect);
 }
 
 #[test]
 fn test_parse_qualifier_star() {
+    let expect: AST = AST::Star(Box::new(AST::Char('a')));
+
     // テスト対象を実行
     let ast: AST = AST::Char('a');
     let actual: AST = parse_qualifier(Qualifier::Star, ast);
-
-    let expect: AST = AST::Star(Box::new(AST::Char('a')));
-
     assert_eq!(actual, expect);
 }
 
 #[test]
 fn test_parse_qualifier_question() {
+    let expect: AST = AST::Question(Box::new(AST::Char('a')));
+
     // テスト対象を実行
     let ast: AST = AST::Char('a');
     let actual: AST = parse_qualifier(Qualifier::Question, ast);
-
-    let expect: AST = AST::Question(Box::new(AST::Char('a')));
-
     assert_eq!(actual, expect);
 }
 
@@ -230,20 +232,26 @@ fn test_fold_or_if_false() {
 
 #[test]
 fn test_convert_char_to_qualifier_plus() {
-    let plus: Qualifier = convert_char_to_qualifier('+').unwrap();
-    assert_eq!(plus, Qualifier::Plus);
+    let expect: Qualifier = Qualifier::Plus;
+    // テスト対象を実行
+    let actual: Qualifier = convert_char_to_qualifier('+').unwrap();
+    assert_eq!(actual, expect);
 }
 
 #[test]
 fn test_convert_char_to_qualifier_star() {
-    let star: Qualifier = convert_char_to_qualifier('*').unwrap();
-    assert_eq!(star, Qualifier::Star);
+    let expect: Qualifier = Qualifier::Star;
+    // テスト対象を実行
+    let actual: Qualifier = convert_char_to_qualifier('*').unwrap();
+    assert_eq!(actual, expect);
 }
 
 #[test]
 fn test_convert_char_to_qualifier_question() {
-    let question: Qualifier = convert_char_to_qualifier('?').unwrap();
-    assert_eq!(question, Qualifier::Question);
+    let expect: Qualifier = Qualifier::Question;
+    // テスト対象を実行
+    let actual: Qualifier = convert_char_to_qualifier('?').unwrap();
+    assert_eq!(actual, expect);
 }
 
 #[test]
@@ -255,38 +263,47 @@ fn test_convert_char_to_qualifier_none() {
 #[test]
 fn test_parse_normal_string() {
     // ----- "abc" が入力されたケース -----
-    let expect1: AST = AST::Seq(vec![AST::Char('a'), AST::Char('b'), AST::Char('c')]);
+    let expect: AST = AST::Seq(vec![AST::Char('a'), AST::Char('b'), AST::Char('c')]);
+    // テスト対象を実行
+    let pattern: &str = "abc";
+    let actual: AST = parse(pattern).unwrap();
+    assert_eq!(actual, expect);
+}
 
-    let pattern1: &str = "abc";
-    let actual1: AST = parse(pattern1).unwrap();
-    assert_eq!(actual1, expect1);
-
+#[test]
+fn test_parse_contain_qualifier() {
     // ----- "abc+" が入力されたケース -----
-    let expect2: AST = AST::Seq(vec![AST::Char('a'), AST::Char('b'), AST::Plus(Box::new(AST::Char('c')))]);
+    let expect: AST = AST::Seq(vec![AST::Char('a'), AST::Char('b'), AST::Plus(Box::new(AST::Char('c')))]);
+    // テスト対象を実行
+    let pattern: &str = "abc+";
+    let actual: AST = parse(pattern).unwrap();
+    assert_eq!(actual, expect);    
+}
 
-    let pattern2: &str = "abc+";
-    let actual2: AST = parse(pattern2).unwrap();
-    assert_eq!(actual2, expect2);
-
+#[test]
+fn test_parse_contain_or() {
     // ----- "abc|def|ghi" が入力されたケース-----
     let abc: AST = AST::Seq(vec![AST::Char('a'), AST::Char('b'), AST::Char('c')]);
     let def: AST = AST::Seq(vec![AST::Char('d'), AST::Char('e'), AST::Char('f')]);
     let ghi: AST = AST::Seq(vec![AST::Char('g'), AST::Char('h'), AST::Char('i')]);
 
-    let expect3: AST = AST::Or(
+    let expect: AST = AST::Or(
         Box::new(abc),
         Box::new(AST::Or(
             Box::new(def),
             Box::new(ghi),
         ))
     );
+    // テスト対象を実行
+    let pattern: &str= "abc|def|ghi";
+    let actual: AST = parse(pattern).unwrap();
+    assert_eq!(actual, expect);
+}
 
-    let pattern3: &str= "abc|def|ghi";
-    let actual3: AST = parse(pattern3).unwrap();
-    assert_eq!(actual3, expect3);
-
+#[test]
+fn test_parse_contain_paran() {
     // ----- "abc(def|ghi)" が入力されたケース-----
-    let expect4: AST = AST::Seq(vec![
+    let expect: AST = AST::Seq(vec![
         AST::Char('a'),
         AST::Char('b'),
         AST::Char('c'),
@@ -295,8 +312,9 @@ fn test_parse_normal_string() {
             Box::new(AST::Seq(vec![AST::Char('g'), AST::Char('h'), AST::Char('i')]))
         )
     ]);
-    let pattern4: &str = "abc(def|ghi)";
-    let actual4: AST = parse(pattern4).unwrap();
+    // テスト対象を実行
+    let pattern: &str = "abc(def|ghi)";
+    let actual: AST = parse(pattern).unwrap();
 
-    assert_eq!(actual4, expect4);
+    assert_eq!(actual, expect);
 }
