@@ -5,6 +5,6 @@ mod helper;
 use engine::do_match;
 
 fn main() {
-    println!("{}", do_match("ab(c|d)", "abc"));
-    println!("{}", do_match("ab(c|d)", "abx"));
+    println!("{}", do_match("ab(c|d)", "abc").unwrap());
+    println!("{}", do_match("ab(c|d)", "abx").unwrap());
 }
