@@ -189,7 +189,7 @@ impl Generator {
     }
 }
 
-pub fn gen_code(ast: &AST) -> Result<Vec<Instruction>, CodeGenError> {
+pub fn get_code(ast: &AST) -> Result<Vec<Instruction>, CodeGenError> {
     let mut generator = Generator::default();
     match generator.gen_code(ast) {
         Ok(()) => Ok(generator.instructions),
@@ -376,6 +376,22 @@ fn test_gen_code_success() {
     let _ = generator.gen_code(&or);
     let actual: Vec<Instruction> = generator.instructions;
     assert_eq!(actual, expect);
+}
 
+#[test]
+fn test_get_code_success() {
+    let expect: Vec<Instruction> = vec![
+        Instruction::Split(1, 3),
+        Instruction::Char('a'),
+        Instruction::Jump(4),
+        Instruction::Char('b'),
+        Instruction::Match
+    ];
 
+    let e1: Box<AST> = Box::new(AST::Seq(vec![AST::Char('a')]));
+    let e2: Box<AST> = Box::new(AST::Seq(vec![AST::Char('b')]));
+    let or = AST::Or(e1, e2);
+
+    let actual = get_code(&or).unwrap();
+    assert_eq!(actual, expect);
 }

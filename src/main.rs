@@ -2,16 +2,9 @@ mod engine;
 mod error;
 mod helper;
 
-use engine::{
-    parser::parse,
-    codegen::gen_code,
-};
+use engine::do_match;
+
 fn main() {
-    let mut ast = parse("ab*(c|d)").unwrap();
-    println!("{:?}", ast);
-    println!("{:?}", gen_code(&ast).unwrap());
-
-    ast = parse(r"a|b").unwrap();
-    println!("{:?}", gen_code(&ast));
+    println!("{}", do_match("ab(c|d)", "abc"));
+    println!("{}", do_match("ab(c|d)", "abx"));
 }
-

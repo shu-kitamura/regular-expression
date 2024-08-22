@@ -58,3 +58,19 @@ impl Display for CodeGenError {
 }
 
 impl Error for CodeGenError {}
+
+/// コード評価時のエラーを表す型
+#[derive(Debug, PartialEq)]
+pub enum EvalError {
+    PCOverFlow,     // PC がオーバーフローした場合のエラー
+    CharIndexOverFlow,     // SP がオーバーフローした場合のエラー
+    InvalidPC,
+}
+
+impl Display for EvalError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "EvalError: {:?}", self)
+    }
+}
+
+impl Error for EvalError {}
