@@ -95,21 +95,3 @@ impl Display for RegexError {
         }
     }
 }
-
-impl From<CodeGenError> for RegexError {
-    fn from(error: CodeGenError) -> Self {
-        RegexError::CodeGenError(error)
-    }
-}
-
-impl From<EvalError> for RegexError {
-    fn from(error: EvalError) -> Self {
-        RegexError::EvalError(error)
-    }
-}
-
-impl From<ParseError> for RegexError {
-    fn from(error: ParseError) -> Self {
-        RegexError::ParseError(error)
-    }
-}
