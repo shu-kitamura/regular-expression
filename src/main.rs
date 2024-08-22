@@ -1,10 +1,10 @@
 mod engine;
 mod error;
-mod helper;
 
-use engine::do_match;
+use engine::match_line;
 
 fn main() {
-    println!("{}", do_match("ab(c|d)", "abc").unwrap());
-    println!("{}", do_match("ab(c|d)", "abx").unwrap());
+    println!("{}", match_line("ab(c|d)", "abc").unwrap());
+    println!("{}", match_line("ab(c|d)", "xabcdefg").unwrap());
+    println!("{}", match_line("ab(c|d)", "abx").unwrap());
 }

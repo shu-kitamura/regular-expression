@@ -1,10 +1,10 @@
-use super::{
-    instruction::Instruction,
-    parser::AST
-};
 use crate::{
-    helper::safe_add,
     error::CodeGenError,
+    engine::{
+        helper::safe_add,
+        instruction::Instruction,
+        parser::AST,
+    }
 };
 
 

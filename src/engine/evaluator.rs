@@ -1,10 +1,12 @@
-use super::instruction::Instruction;
 use crate::{
-    helper::safe_add,
     error::EvalError,
+    engine::{
+        instruction::Instruction,
+        helper::safe_add
+    }
 };
 
-fn eval_char(inst_char: &char, chars: &[char], index: usize)-> bool {
+fn eval_char(inst_char: &char, chars: &Vec<char>, index: usize)-> bool {
     match chars.get(index) {
         Some(c) => if c == inst_char {
             true
@@ -78,16 +80,16 @@ pub fn eval(inst: &[Instruction], chars:&Vec<char>) -> Result<bool, EvalError> {
 
 #[test]
 fn test_eval_char_true() {
-    let actual: bool = eval_char(&'a', &['a', 'b', 'c'], 0);
+    let actual: bool = eval_char(&'a', &vec!['a', 'b', 'c'], 0);
     assert_eq!(actual, true);
 }
 
 #[test]
 fn test_eval_char_false() {
-    let actual1: bool = eval_char(&'a', &['a', 'b', 'c'], 1);
+    let actual1: bool = eval_char(&'a', &vec!['a', 'b', 'c'], 1);
     assert_eq!(actual1, false);
 
-    let actual2: bool = eval_char(&'a', &['a', 'b', 'c'], 10);
+    let actual2: bool = eval_char(&'a', &vec!['a', 'b', 'c'], 10);
     assert_eq!(actual2, false);
 }
 
