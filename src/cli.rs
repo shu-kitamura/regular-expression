@@ -1,9 +1,11 @@
 //! コマンドの位置引数・オプションを定義
 
-use clap::Parser;
+use clap::{ArgAction, Parser};
 use crate::error::CommandLineError;
 
 #[derive(Debug, Parser)]
+#[command(version)]
+#[clap(disable_version_flag = true, disable_help_flag = true)]
 pub struct Args {
 
     #[arg(value_name = "PATTERN")]
@@ -30,6 +32,13 @@ pub struct Args {
     /// マッチしなかった行を表示する
     pub invert_match: bool,
 
+    #[arg(long, action = ArgAction::Help)]
+    /// help を表示する
+    help: Option<bool>,
+
+    #[arg(short = 'V', long = "version", action = ArgAction::Version)]
+    /// Version を表示する
+    version: Option<bool>,
 }
 
 impl Args {
