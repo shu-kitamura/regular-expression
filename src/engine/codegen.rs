@@ -1,4 +1,4 @@
-//! AST からコード(Instruction)を生成するための型・関数
+//! AST からコード(Instruction)を生成するための型・関数  
 //! "ab(c|b)" が入力された場合、以下のコードを生成する
 //! 
 //! ```text
@@ -57,8 +57,8 @@ impl Generator {
         }
     }
 
-    /// AST::Star 型に対応する Instruction を生成し、instructions に push する
-    /// a* 入力された場合、以下のような Instruction を生成する
+    /// AST::Star 型に対応する Instruction を生成し、instructions に push する  
+    /// a* 入力された場合、以下のような Instruction を生成する  
     /// 
     /// ```text
     /// 0 : split 1, 3
@@ -98,8 +98,8 @@ impl Generator {
         }
     }
 
-    /// AST::Plus 型に対応する Instruction を生成し、instructions に push する
-    /// a+ 入力された場合、以下のような Instruction を生成する
+    /// AST::Plus 型に対応する Instruction を生成し、instructions に push する  
+    /// a+ 入力された場合、以下のような Instruction を生成する  
     /// 
     /// ```text
     /// 0 : Char(a)
@@ -124,8 +124,8 @@ impl Generator {
         }
     }
 
-    /// AST::Question 型に対応する Instruction を生成し、instructions に push する
-    /// a? 入力された場合、以下のような Instruction を生成する
+    /// AST::Question 型に対応する Instruction を生成し、instructions に push する  
+    /// a? 入力された場合、以下のような Instruction を生成する  
     /// 
     /// ```text
     /// 0 : split 1, 2
@@ -157,8 +157,8 @@ impl Generator {
         }
     }
 
-    /// AST::Or 型に対応する Instruction を生成し、instructions に push する
-    /// a|b が入力された場合、以下のような Instruction を生成する。
+    /// AST::Or 型に対応する Instruction を生成し、instructions に push する  
+    /// a|b が入力された場合、以下のような Instruction を生成する。  
     /// 
     /// ```text
     /// 0 : split 1, 3
@@ -228,7 +228,7 @@ impl Generator {
         Ok(())
     }
 
-    /// AST から Instruction を生成し、instructions に push する
+    /// AST から Instruction を生成し、instructions に push する  
     /// 最後に Match を instructions に push する
     fn gen_code(&mut self, ast: &AST) -> Result<(), CodeGenError> {
         // AST から Instruction を生成し、instructions に挿入する

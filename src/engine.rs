@@ -1,4 +1,4 @@
-//! パターンとファイルから read した行を受け取り、マッチングの関数を実行する
+//! マッチングを行う関数を定義
 
 pub mod codegen;
 pub mod evaluator;
@@ -33,14 +33,14 @@ fn match_string(insts: &Vec<Instruction>, string: &str) -> Result<bool, RegexEng
 /// 
 /// * pattern -> 正規表現のパターン
 /// * line -> マッチング対象の文字列
-/// * is_ignore_case -> 大小文字の区別をするかどうか。-c オプションがのために使用
+/// * is_ignore_case -> 大小文字の区別をするかどうか。-c オプションのために使用
 /// * is_invert_match -> 結果を逆にする(マッチ成功時に false、失敗時に true)。-v オプションのために使用
 /// 
 /// # 返り値
 /// 
-/// エラーなく実行でき、マッチングに成功した場合 Ok(true) を返す。
-/// エラーなく実行でき、マッチングに失敗した場合 Ok(false) を返す。
-/// ※ -v オプションが指定されている場合は true/false が反対になる。
+/// エラーなく実行でき、マッチングに成功した場合 Ok(true) を返す。  
+/// エラーなく実行でき、マッチングに失敗した場合 Ok(false) を返す。  
+/// ※ -v オプションが指定されている場合は true/false が反対になる。  
 /// 
 /// エラーが発生した場合 Err を返す。
 pub fn match_line(mut pattern: String, mut line: String, is_ignore_case: bool, is_invert_match: bool) -> Result<bool, RegexEngineError> {

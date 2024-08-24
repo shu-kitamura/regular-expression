@@ -1,3 +1,5 @@
+//! コマンドの位置引数・オプションを定義
+
 use clap::Parser;
 use crate::error::CommandLineError;
 
