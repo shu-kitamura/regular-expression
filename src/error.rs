@@ -78,20 +78,20 @@ impl Error for EvalError {}
 
 /// 全種類のエラーを扱うためのエラー
 #[derive(Debug, PartialEq)]
-pub enum RegexError {
+pub enum RegexEngineError {
     CodeGenError(CodeGenError),
     EvalError(EvalError),
     ParseError(ParseError),    
 }
 
-impl Error for RegexError {}
+impl Error for RegexEngineError {}
 
-impl Display for RegexError {
+impl Display for RegexEngineError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            RegexError::CodeGenError(e) => write!(f, "{e}"),
-            RegexError::EvalError(e) => write!(f, "{e}"),
-            RegexError::ParseError(e) => write!(f, "{e}")
+            RegexEngineError::CodeGenError(e) => write!(f, "{e}"),
+            RegexEngineError::EvalError(e) => write!(f, "{e}"),
+            RegexEngineError::ParseError(e) => write!(f, "{e}")
         }
     }
 }

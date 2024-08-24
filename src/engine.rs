@@ -5,7 +5,7 @@ pub mod instruction;
 pub mod parser;
 
 use crate::{
-    error::RegexError,
+    error::RegexEngineError,
     engine::{
         codegen::get_code,
         evaluator::eval,
@@ -14,25 +14,25 @@ use crate::{
     }
 };
 
-fn match_string(insts: &Vec<Instruction>, string: &str) -> Result<bool, RegexError> {
+fn match_string(insts: &Vec<Instruction>, string: &str) -> Result<bool, RegexEngineError> {
     let charcters: Vec<char> = string.chars().collect();
     let match_result: bool = match eval(&insts, &charcters) {
         Ok(res) => res,
-        Err(e) => return Err(RegexError::EvalError(e))
+        Err(e) => return Err(RegexEngineError::EvalError(e))
     };
 
     Ok(match_result)
 }
 
-pub fn match_line(pattern: &str, line: &str) -> Result<bool, RegexError> {
+pub fn match_line(pattern: &str, line: &str) -> Result<bool, RegexEngineError> {
     let ast: parser::AST = match parse(pattern) {
         Ok(res) => res,
-        Err(e) => return Err(RegexError::ParseError(e)),
+        Err(e) => return Err(RegexEngineError::ParseError(e)),
     };
 
     let code: Vec<Instruction> = match get_code(&ast) {
         Ok(instructions) => instructions,
-        Err(e) => return Err(RegexError::CodeGenError(e)),
+        Err(e) => return Err(RegexEngineError::CodeGenError(e)),
     };
 
     for (i, _) in line.char_indices() {
@@ -42,7 +42,6 @@ pub fn match_line(pattern: &str, line: &str) -> Result<bool, RegexError> {
         };
 
         if is_match {
-            println!("{line}");
             return Ok(true)
         }
     }
@@ -94,7 +93,7 @@ fn test_match_string_eval_error() {
     ];
 
     let actual = match_string(&insts, "abc");    
-    assert_eq!(actual, Err(RegexError::EvalError(EvalError::InvalidPC)));
+    assert_eq!(actual, Err(RegexEngineError::EvalError(EvalError::InvalidPC)));
 }
 
 #[test]
@@ -114,5 +113,5 @@ fn test_match_line_parse_error() {
     use super::error::ParseError;
 
     let actual = match_line("ab(c|d", "a");
-    assert_eq!(actual, Err(RegexError::ParseError(ParseError::NoRightParen)));
+    assert_eq!(actual, Err(RegexEngineError::ParseError(ParseError::NoRightParen)));
 }
