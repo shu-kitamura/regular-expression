@@ -111,7 +111,7 @@ impl Display for CommandLineError {
     fn fmt (&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             CommandLineError::NoPattern => write!(f, "CommandLineError : No pattern specified."),
-            CommandLineError::NoFile => write!(f, "No file specified.")
+            CommandLineError::NoFile => write!(f, "CommandLineError : No file specified.")
         }
     }
 }
