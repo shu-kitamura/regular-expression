@@ -46,23 +46,25 @@ impl Args {
     // 位置引数と -e オプションのどちらにもパターンが指定されていない場合、エラーを返す。
     // & は、付けないと呼び出し時に所有権が移動するため、付けている。
     pub fn get_patterns(&mut self) -> Result<&Vec<String>, CommandLineError> {
-        match &self.pattern {
-            Some(p) => self.patterns.push(p.to_owned()),
-            None => {}
-        };
-
-        if self.patterns.len() != 0 {
-            Ok(&self.patterns)
+        if self.patterns.is_empty() {
+            match &self.pattern {
+                Some(p) => self.patterns.push(p.to_owned()),
+                None => return Err(CommandLineError::NoPattern)
+            }
         } else {
-            Err(CommandLineError::NoPattern)
+            match &self.pattern {
+                Some(file) => self.files.insert(0, file.to_owned()),
+                None => return Err(CommandLineError::NoFile)
+            }
         }
-    }
 
+        Ok(&self.patterns)
+    }
     // 位置引数に指定したファイルの配列を返す。
     // ファイルが指定されていない場合、エラーを返す。
     // & は、付けないと呼び出し時に所有権が移動するため、付けている。
     pub fn get_files(&self) -> Result<&Vec<String>, CommandLineError> {
-        if self.files.len() != 0 {
+        if !self.files.is_empty() {
             Ok(&self.files)
         } else {
             Err(CommandLineError::NoFile)
