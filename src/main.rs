@@ -46,7 +46,7 @@ fn main() {
             Ok(reader) => reader,
             Err(e) => {
                 eprintln!("{e}");
-                return
+                continue;
             }
         };
 
@@ -55,8 +55,8 @@ fn main() {
             let line = match result {
                 Ok(line) => line,
                 Err(e) => {
-                    eprint!("{}", FileError::FailedRead(e.to_string()));
-                    return
+                    eprint!("{}", FileError::FailedRead(e.to_string(), file.to_string()));
+                    break
                 }
             };
 
