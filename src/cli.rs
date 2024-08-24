@@ -6,11 +6,11 @@ pub struct Args {
 
     #[arg(value_name = "PATTERN")]
     /// パターンを指定する。
-    pub pattern: Option<String>,
+    pattern: Option<String>,
 
     #[arg(value_name = "FILE")]
     /// ファイルを指定する。
-    pub files: Vec<String>,
+    files: Vec<String>,
 
     #[arg(short = 'e', long = "regexp", value_name = "PATTERN")]
     /// パターンを指定する。このオプションを使用すれば複数のパターンを指定することができる
