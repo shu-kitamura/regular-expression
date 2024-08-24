@@ -33,8 +33,9 @@ fn main() {
         }
     };
 
+    let mut matching_count = 0;
+
     for file in files {
-    
         let buf_reader: BufReader<File> = match open_file(file) {
             Ok(reader) => reader,
             Err(e) => {
@@ -56,7 +57,10 @@ fn main() {
                 match match_line(pattern.to_string(), line.to_owned(), args.ignore_case, args.invert_match) {
                     Ok(is_match) => {
                         if is_match {
-                            println!("{line}");
+                            matching_count += 1;
+                            if !args.count {
+                                println!("{line}");
+                            } 
                             break
                         }
                     },
@@ -67,5 +71,9 @@ fn main() {
                 }
             }
         }
+    }
+
+    if args.count {
+        println!("{matching_count}");
     }
 }
