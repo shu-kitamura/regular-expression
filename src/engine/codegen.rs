@@ -7,7 +7,6 @@ use crate::{
     }
 };
 
-
 /// コード生成器の型
 #[derive(Default, Debug)]
 struct Generator {

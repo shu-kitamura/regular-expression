@@ -3,8 +3,10 @@ mod error;
 mod cli;
 mod fileread;
 
-use std::{fs::File, io::BufRead};
-
+use std::{
+    fs::File,
+    io::{BufRead, BufReader}
+};
 use clap::Parser;
 use crate::{
     cli::Args,
@@ -15,7 +17,7 @@ use crate::{
 
 fn main() {
     let mut args: Args = Args::parse();
-    let mut patterns = match args.get_patterns(){
+    let patterns = match args.get_patterns(){
         Ok(pattern_list) => pattern_list.clone(),
         Err(e) => {
             eprintln!("{e}");
@@ -23,44 +25,47 @@ fn main() {
         },
     };
 
-    println!("{:?}", patterns);
-
-    for i in 0..patterns.len() {
-        if args.ignore_case {
-            patterns[i] = patterns[i].to_lowercase();
-        }
-    };
-
-    println!("{:?}", patterns);
-
-    let files = match args.get_files() {
+    let files: &Vec<String> = match args.get_files() {
         Ok(file_list) => file_list,
         Err(e) => {
             eprintln!("{e}");
             return
         }
     };
-    println!("{:?}", files);
 
-    let is_count = args.count;
+    for file in files {
+    
+        let buf_reader: BufReader<File> = match open_file(file) {
+            Ok(reader) => reader,
+            Err(e) => {
+                eprintln!("{e}");
+                return
+            }
+        };
 
-    let ms = "ABCD".to_string();
-    ignore_case(ms);
+        for result in buf_reader.lines() {
+            let line = match result {
+                Ok(line) => line,
+                Err(e) => {
+                    eprint!("{}", FileError::FailedRead(e.to_string()));
+                    return
+                }
+            };
 
-    let buf_reader = match open_file("a"){
-        Ok(reader) => reader,
-        Err(e) => eprintln!("{e}"),
-    };
-    for result in buf_reader.lines() {
-        match result {
-            Ok(line) => println!("{line}"),
-            Err(e) => eprint!("{}", FileError::FailedRead(e.to_string()))
+            for pattern in &patterns {
+                match match_line(pattern.to_string(), line.to_owned(), args.ignore_case, args.invert_match) {
+                    Ok(is_match) => {
+                        if is_match {
+                            println!("{line}");
+                            break
+                        }
+                    },
+                    Err(e) => {
+                        eprintln!("Following error is occured in matching, pattern = '{pattern}', line = '{line}'\n{e}");
+                        return
+                    }
+                }
+            }
         }
     }
-}
-
-fn ignore_case(s:String) -> String {
-    println!("{} : {}", s, s.to_lowercase());
-
-    s.to_lowercase()
 }

@@ -24,8 +24,13 @@ fn match_string(insts: &Vec<Instruction>, string: &str) -> Result<bool, RegexEng
     Ok(match_result)
 }
 
-pub fn match_line(pattern: &str, line: &str) -> Result<bool, RegexEngineError> {
-    let ast: parser::AST = match parse(pattern) {
+pub fn match_line(mut pattern: String, mut line: String, is_ignore_case: bool, is_invert_match: bool) -> Result<bool, RegexEngineError> {
+    if is_ignore_case {
+        pattern = pattern.to_lowercase();
+        line = line.to_lowercase();
+    }
+
+    let ast: parser::AST = match parse(pattern.as_str()) {
         Ok(res) => res,
         Err(e) => return Err(RegexEngineError::ParseError(e)),
     };
@@ -42,10 +47,19 @@ pub fn match_line(pattern: &str, line: &str) -> Result<bool, RegexEngineError> {
         };
 
         if is_match {
-            return Ok(true)
+            if is_invert_match {
+                return Ok(false)
+            } else {
+                return Ok(true)
+            }
         }
     }
-    Ok(false)
+
+    if is_invert_match {
+        Ok(true)
+    } else {
+        Ok(false)
+    }
 }
 
 #[test]
@@ -98,20 +112,46 @@ fn test_match_string_eval_error() {
 
 #[test]
 fn test_match_line_true() {
-    let actual: bool = match_line("ab*(c|d)", "xorabbbbd").unwrap();
+    let actual: bool = match_line(
+        "ab*(c|d)".to_string(),
+        "xorabbbbd".to_string(),
+        false,
+        false
+    ).unwrap();
     assert_eq!(actual, true);
 }
 
 #[test]
 fn test_match_line_false() {
-    let actual: bool = match_line("ab*(c|d)", "abbbbxccd").unwrap();
+    let actual: bool = match_line(
+        "Ab*(c|d)".to_string(),
+        "abbbbxccd".to_string(),
+        true,
+        false,
+    ).unwrap();
     assert_eq!(actual, false);
+}
+
+#[test]
+fn test_match_invert() {
+    let actual: bool = match_line(
+        "Ab*(c|d)".to_string(),
+        "abbbbxccd".to_string(),
+        true,
+        true,
+    ).unwrap();
+    assert_eq!(actual, true);
 }
 
 #[test]
 fn test_match_line_parse_error() {
     use super::error::ParseError;
 
-    let actual = match_line("ab(c|d", "a");
+    let actual = match_line(
+        "ab(c|d".to_string(),
+        "a".to_string(),
+        false,
+        false
+    );
     assert_eq!(actual, Err(RegexEngineError::ParseError(ParseError::NoRightParen)));
 }
