@@ -17,7 +17,9 @@ use crate::{
 
 fn main() {
     let mut args: Args = Args::parse();
-    let patterns = match args.get_patterns(){
+
+    // 引数・オプションに指定したパターンを取得
+    let patterns: Vec<String> = match args.get_patterns(){
         Ok(pattern_list) => pattern_list.clone(),
         Err(e) => {
             eprintln!("{e}");
@@ -25,6 +27,7 @@ fn main() {
         },
     };
 
+    // 引数に指定したファイルを取得
     let files: &Vec<String> = match args.get_files() {
         Ok(file_list) => file_list,
         Err(e) => {
@@ -33,9 +36,12 @@ fn main() {
         }
     };
 
-    let mut matching_count = 0;
+    // マッチした行数を数えるための変数
+    // -c オプションが指定されたときに使う
+    let mut matching_count: i32 = 0;
 
     for file in files {
+        // ファイルをオープンする
         let buf_reader: BufReader<File> = match open_file(file) {
             Ok(reader) => reader,
             Err(e) => {
@@ -44,6 +50,7 @@ fn main() {
             }
         };
 
+        // ファイルを1行ずつ read する
         for result in buf_reader.lines() {
             let line = match result {
                 Ok(line) => line,
@@ -53,14 +60,17 @@ fn main() {
                 }
             };
 
+            // read した行を指定したパターンとマッチ
             for pattern in &patterns {
                 match match_line(pattern.to_string(), line.to_owned(), args.ignore_case, args.invert_match) {
                     Ok(is_match) => {
                         if is_match {
                             matching_count += 1;
-                            if !args.count {
+                            if !args.count { // -c が指定されたときに、println の処理を飛ばすため。
                                 println!("{line}");
-                            } 
+                            }
+                            // マッチした場合はループを抜ける。
+                            // 1つのパターンとマッチした時点で、残りのパターンのマッチはしないため。
                             break
                         }
                     },
@@ -73,6 +83,7 @@ fn main() {
         }
     }
 
+    // -c が true の場合、行数を表示する。
     if args.count {
         println!("{matching_count}");
     }

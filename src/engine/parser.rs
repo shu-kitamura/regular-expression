@@ -1,4 +1,26 @@
 //! 正規表現の式をパースするための型・関数
+//! 式をパースして、抽象構文木(AST)に変換する。
+//! "abc(def|ghi)"" が入力された場合、以下の AST に変換する
+//! 
+//! ```text
+//! Seq(
+//!     Char(a),
+//!     Char(b),
+//!     Char(c),
+//!     Or(
+//!         Seq(
+//!             Char(d),
+//!             Char(e),
+//!             Char(f)
+//!         ),
+//!         Seq(
+//!             Char(g),
+//!             Char(h),
+//!             Char(i)
+//!         )
+//!     )
+//! )
+//! ```
 
 use std::mem::take;
 use crate::error::ParseError;

@@ -1,3 +1,5 @@
+//! ファイルを読み込むための関数
+
 use std::{
     fs::File,
     io::BufReader

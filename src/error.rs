@@ -1,4 +1,4 @@
-//! エラーの型を定義する
+//! このソフトウェアで使用するエラーの型を定義
 
 use std::{
     error::Error,
@@ -51,6 +51,7 @@ pub enum CodeGenError {
     FailQuestion, // ? のコード生成エラー
 }
 
+/// CodeGenErrorを表示するため、Displayトレイトを実装
 impl Display for CodeGenError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "CodeGenError: {:?}", self)
@@ -67,6 +68,7 @@ pub enum EvalError {
     InvalidPC,
 }
 
+/// EvalErrorを表示するため、Displayトレイトを実装
 impl Display for EvalError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "EvalError: {:?}", self)
@@ -86,6 +88,7 @@ pub enum RegexEngineError {
 
 impl Error for RegexEngineError {}
 
+/// RegexEngineErrorを表示するため、Displayトレイトを実装
 impl Display for RegexEngineError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {

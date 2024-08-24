@@ -1,3 +1,5 @@
+//! パターンとファイルから read した行を受け取り、マッチングの関数を実行する
+
 pub mod codegen;
 pub mod evaluator;
 pub mod helper;
@@ -10,10 +12,11 @@ use crate::{
         codegen::get_code,
         evaluator::eval,
         instruction::Instruction,
-        parser::parse,
+        parser::{AST, parse},
     }
 };
 
+/// 文字列のマッチングを実行する。
 fn match_string(insts: &Vec<Instruction>, string: &str) -> Result<bool, RegexEngineError> {
     let charcters: Vec<char> = string.chars().collect();
     let match_result: bool = match eval(&insts, &charcters) {
@@ -24,29 +27,56 @@ fn match_string(insts: &Vec<Instruction>, string: &str) -> Result<bool, RegexEng
     Ok(match_result)
 }
 
+/// パターンと文字列のマッチングを実行する
+/// 
+/// # 引数
+/// 
+/// * pattern -> 正規表現のパターン
+/// * line -> マッチング対象の文字列
+/// * is_ignore_case -> 大小文字の区別をするかどうか。-c オプションがのために使用
+/// * is_invert_match -> 結果を逆にする(マッチ成功時に false、失敗時に true)。-v オプションのために使用
+/// 
+/// # 返り値
+/// 
+/// エラーなく実行でき、マッチングに成功した場合 Ok(true) を返す。
+/// エラーなく実行でき、マッチングに失敗した場合 Ok(false) を返す。
+/// ※ -v オプションが指定されている場合は true/false が反対になる。
+/// 
+/// エラーが発生した場合 Err を返す。
 pub fn match_line(mut pattern: String, mut line: String, is_ignore_case: bool, is_invert_match: bool) -> Result<bool, RegexEngineError> {
+    // -i が指定された場合の処理
+    // パターンと行を小文字にすることで、区別をしないようにする
     if is_ignore_case {
         pattern = pattern.to_lowercase();
         line = line.to_lowercase();
     }
 
-    let ast: parser::AST = match parse(pattern.as_str()) {
+    // パターンから AST を生成する。
+    let ast: AST = match parse(pattern.as_str()) {
         Ok(res) => res,
         Err(e) => return Err(RegexEngineError::ParseError(e)),
     };
 
+    // AST から コード(Instructionの配列)を生成する。
     let code: Vec<Instruction> = match get_code(&ast) {
         Ok(instructions) => instructions,
         Err(e) => return Err(RegexEngineError::CodeGenError(e)),
     };
 
     for (i, _) in line.char_indices() {
+        // abcdefg という文字列の場合、以下のように順にマッチングする。
+        //     ループ1 : abcdefg
+        //     ループ2 : bcdefg
+        //     ・・・
+        //     ループN : g
         let is_match: bool = match match_string(&code, &line[i..]) {
             Ok(res) => res,
             Err(e) => return Err(e),
         };
 
+        // マッチングが成功した場合の処理
         if is_match {
+            // -v が指定されている場合は false、指定されていない場合は true を返す 
             if is_invert_match {
                 return Ok(false)
             } else {
@@ -55,6 +85,8 @@ pub fn match_line(mut pattern: String, mut line: String, is_ignore_case: bool, i
         }
     }
 
+    // for文を抜ける = マッチングが失敗する のため、
+    // -v が指定されている場合は true、指定されていない場合は false を返す
     if is_invert_match {
         Ok(true)
     } else {

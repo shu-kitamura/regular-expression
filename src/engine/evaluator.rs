@@ -1,3 +1,5 @@
+//! Instruction と char配列を受け取って評価する
+
 use crate::{
     error::EvalError,
     engine::{
@@ -6,6 +8,7 @@ use crate::{
     }
 };
 
+/// char と Instruction を評価する
 fn eval_char(inst_char: &char, chars: &Vec<char>, index: usize)-> bool {
     match chars.get(index) {
         Some(c) => if c == inst_char {
@@ -17,6 +20,7 @@ fn eval_char(inst_char: &char, chars: &Vec<char>, index: usize)-> bool {
     }
 }
 
+/// プログラムカウンタとchar配列のインデックスをインクリメントする
 fn increment_pc_and_index(pc: &mut usize, index: &mut usize) -> Result<(), EvalError> {
     match safe_add(pc, &1, || EvalError::PCOverFlow) {
         Ok(()) => {},
@@ -36,11 +40,13 @@ fn eval_depth(
     mut char_index: usize,
 ) -> Result<bool, EvalError> {
     loop {
+        // Instruction を取得
         let instruction: &Instruction = match instructions.get(p_counter) {
             Some(inst) => inst,
             None => return Err(EvalError::InvalidPC)
         };
 
+        // Instruction の型に応じて、評価を実行。
         match instruction {
             Instruction::Char(inst_char) => {
                 if eval_char(inst_char, chars, char_index) {

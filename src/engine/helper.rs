@@ -1,4 +1,5 @@
-/// オーバーフロー対策のトレイトを定義
+//! オーバーフロー対策のトレイトを定義
+
 pub trait SafeAdd: Sized {
     fn safe_add(&self, n: &Self) -> Option<Self>;
 }
