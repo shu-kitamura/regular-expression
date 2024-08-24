@@ -1,4 +1,5 @@
 use clap::Parser;
+use crate::error::CommandLineError;
 
 #[derive(Debug, Parser)]
 pub struct Args {
@@ -13,7 +14,7 @@ pub struct Args {
 
     #[arg(short = 'e', long = "regexp", value_name = "PATTERN")]
     /// パターンを指定する。このオプションを使用すれば複数のパターンを指定することができる
-    pub patterns : Vec<String>,
+    patterns : Vec<String>,
 
     #[arg(short = 'c', long = "count")]
     /// マッチした行数のみ表示する
@@ -30,7 +31,30 @@ pub struct Args {
 }
 
 impl Args {
-    fn get_patterns(self) -> Result<Vec<String>, E> {
-        self.patterns.len()
+    // 位置引数と -e オプションに指定したパターンを1つの配列にして返す。
+    // 位置引数と -e オプションのどちらにもパターンが指定されていない場合、エラーを返す。
+    // & は、付けないと呼び出し時に所有権が移動するため、付けている。
+    pub fn get_patterns(&mut self) -> Result<&Vec<String>, CommandLineError> {
+        match &self.pattern {
+            Some(p) => self.patterns.push(p.to_owned()),
+            None => {}
+        };
+
+        if self.patterns.len() != 0 {
+            Ok(&self.patterns)
+        } else {
+            Err(CommandLineError::NoPattern)
+        }
+    }
+
+    // 位置引数に指定したファイルの配列を返す。
+    // ファイルが指定されていない場合、エラーを返す。
+    // & は、付けないと呼び出し時に所有権が移動するため、付けている。
+    pub fn get_files(&self) -> Result<&Vec<String>, CommandLineError> {
+        if self.files.len() != 0 {
+            Ok(&self.files)
+        } else {
+            Err(CommandLineError::NoFile)
+        }
     }
 }
