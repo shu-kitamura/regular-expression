@@ -103,14 +103,31 @@ pub enum CommandLineError {
     NoFile,
 }
 
-/// ParseErrorを表示するため、Displayトレイトを実装
+/// CommandLineErrorを表示するため、Displayトレイトを実装
 impl Display for CommandLineError {
     fn fmt (&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            CommandLineError::NoPattern => write!(f, "No pattern specified."),
+            CommandLineError::NoPattern => write!(f, "CommandLineError : No pattern specified."),
             CommandLineError::NoFile => write!(f, "No file specified.")
         }
     }
 }
 
 impl Error for CommandLineError {}
+
+/// ファイルを read する処理で使用するエラーの型
+#[derive(Debug, PartialEq)]
+pub enum FileError {
+    FailedOpen(String),
+    FailedRead(String),
+}
+
+/// FileReadErrorを表示するため、Displayトレイトを実装
+impl Display for FileError {
+    fn fmt (&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            FileError::FailedOpen(msg) => write!(f, "FileError : Failed open file with following message.\n{msg}."),
+            FileError::FailedRead(msg) => write!(f, "FileError : Failed read file with following message.\n{msg}.")
+        }
+    }
+}

@@ -1,12 +1,17 @@
 mod engine;
 mod error;
 mod cli;
+mod fileread;
 
-use std::borrow::Borrow;
+use std::{fs::File, io::BufRead};
 
 use clap::Parser;
-use engine::match_line;
-use cli::Args;
+use crate::{
+    cli::Args,
+    engine::match_line,
+    error::FileError,
+    fileread::open_file,
+};
 
 fn main() {
     let mut args: Args = Args::parse();
@@ -42,16 +47,16 @@ fn main() {
     let ms = "ABCD".to_string();
     ignore_case(ms);
 
-    let l = "abx";
-    match match_line("ab(c|d)", l) {
-        Ok(res) => if (res && !args.invert_match) || (!res && args.invert_match) {
-            println!("{l}")
-        },
+    let buf_reader = match open_file("a"){
+        Ok(reader) => reader,
         Err(e) => eprintln!("{e}"),
     };
-
-    // println!("{}", match_line("ab(c|d)", "abc").unwrap());
-    // println!("{}", match_line("ab(c|d)", "xabcdefg").unwrap());
+    for result in buf_reader.lines() {
+        match result {
+            Ok(line) => println!("{line}"),
+            Err(e) => eprint!("{}", FileError::FailedRead(e.to_string()))
+        }
+    }
 }
 
 fn ignore_case(s:String) -> String {
