@@ -25,7 +25,7 @@ pub struct Args {
     pub count: bool,
 
     #[arg(short = 'i', long = "ignore-case")]
-    /// マッチしなかった行を表示する
+    /// 大文字と小文字を区別しない
     pub ignore_case: bool,
     
     #[arg(short = 'v', long = "invert-match")]
