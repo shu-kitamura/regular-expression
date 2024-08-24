@@ -95,3 +95,22 @@ impl Display for RegexEngineError {
         }
     }
 }
+
+/// コマンドラインの指定に不正があった場合に出力するエラーの型
+#[derive(Debug)]
+pub enum CommandLineError {
+    NoPattern,
+    NoFile,
+}
+
+/// ParseErrorを表示するため、Displayトレイトを実装
+impl Display for CommandLineError {
+    fn fmt (&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            CommandLineError::NoPattern => write!(f, "No pattern specified."),
+            CommandLineError::NoFile => write!(f, "No file specified.")
+        }
+    }
+}
+
+impl Error for CommandLineError {}
