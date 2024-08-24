@@ -76,7 +76,7 @@ impl Display for EvalError {
 impl Error for EvalError {}
 
 
-/// 全種類のエラーを扱うためのエラー
+/// engine.rs で使用する3種類のエラー(Parse, CodeGen, Eval)を扱うための型
 #[derive(Debug, PartialEq)]
 pub enum RegexEngineError {
     CodeGenError(CodeGenError),
