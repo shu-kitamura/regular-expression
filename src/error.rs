@@ -104,6 +104,7 @@ impl Display for RegexEngineError {
 pub enum CommandLineError {
     NoPattern,
     NoFile,
+    DuplicateFilenameOption,
 }
 
 /// CommandLineErrorを表示するため、Displayトレイトを実装
@@ -111,7 +112,8 @@ impl Display for CommandLineError {
     fn fmt (&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             CommandLineError::NoPattern => write!(f, "CommandLineError : No pattern specified."),
-            CommandLineError::NoFile => write!(f, "CommandLineError : No file specified.")
+            CommandLineError::NoFile => write!(f, "CommandLineError : No file specified."),
+            CommandLineError::DuplicateFilenameOption => write!(f, "CommandLineError : -h, -H options are specified at the same time.")
         }
     }
 }

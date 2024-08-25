@@ -8,6 +8,7 @@ use std::{
     io::{BufRead, BufReader}
 };
 use clap::Parser;
+use error::CommandLineError;
 use crate::{
     cli::Args,
     engine::match_line,
@@ -17,6 +18,12 @@ use crate::{
 
 fn main() {
     let mut args: Args = Args::parse();
+
+    // -h, -H が同時に指定されている場合、エラーを表示して return する
+    if args.with_filename && args.no_filename {
+        eprintln!("{}", CommandLineError::DuplicateFilenameOption);
+        return
+    }
 
     // 引数・オプションに指定したパターンを取得
     let patterns: Vec<String> = match args.get_patterns(){
