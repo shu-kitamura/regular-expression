@@ -5,7 +5,12 @@ mod fileread;
 
 use std::{
     fs::File,
-    io::{BufRead, BufReader}
+    io::{
+        BufRead,
+        BufReader,
+        Stdin,
+        stdin
+    }
 };
 use clap::Parser;
 use error::CommandLineError;
@@ -35,13 +40,7 @@ fn main() {
     };
 
     // 引数に指定したファイルを取得
-    let files: &Vec<String> = match args.get_files() {
-        Ok(file_list) => file_list,
-        Err(e) => {
-            eprintln!("{e}");
-            return
-        }
-    };
+    let files: &Vec<String> = &args.files;
 
     let is_print_filename: bool = is_print_filename(files.len(), args.no_filename, args.with_filename);
 
@@ -49,53 +48,99 @@ fn main() {
     // -c オプションが指定されたときに使う
     let mut matching_count: i32 = 0;
 
-    for file in files {
-        // ファイルをオープンする
-        let buf_reader: BufReader<File> = match open_file(file) {
-            Ok(reader) => reader,
-            Err(e) => {
-                eprintln!("{e}");
-                continue;
-            }
-        };
+    if files.is_empty() {
+        let stdin: Stdin = stdin();
+        let mut buf_reader: BufReader<Stdin> = BufReader::new(stdin);
 
-        // ファイルを1行ずつ read する
-        for result in buf_reader.lines() {
-            let line = match result {
-                Ok(line) => line,
+        // 標準入力を1行ずつ read し、マッチングを実行する
+        match match_file(
+            &mut buf_reader,
+            "",
+            &patterns,
+            args.ignore_case,
+            args.invert_match,
+            false,
+            args.count
+        ) {
+            Some(c) => matching_count += c,
+            None => {}
+        }
+    } else {
+        for file in files {
+            // ファイルをオープンする
+            let mut buf_reader: BufReader<File> = match open_file(file) {
+                Ok(reader) => reader,
                 Err(e) => {
-                    eprint!("{}", FileError::FailedRead(e.to_string(), file.to_string()));
-                    break
+                    eprintln!("{e}");
+                    continue;
                 }
             };
 
-            // read した行を指定したパターンとマッチ
-            for pattern in &patterns {
-                match match_line(pattern.to_string(), line.to_owned(), args.ignore_case, args.invert_match) {
-                    Ok(is_match) => {
-                        if is_match {
-                            matching_count += 1;
-                            if !args.count { // -c が指定されたときに、print の処理を飛ばすため。
-                                print(file.to_owned(), line, is_print_filename);
-                            }
-                            // マッチした場合はループを抜ける。
-                            // 1つのパターンとマッチした時点で、残りのパターンのマッチはしないため。
-                            break
+            // ファイルを1行ずつ read し、マッチングを実行する
+            match match_file(
+                &mut buf_reader,
+                file,
+                &patterns,
+                args.ignore_case,
+                args.invert_match,
+                is_print_filename,
+                args.count
+            ) {
+                Some(c) => matching_count += c,
+                None => {}
+            };
+
+        }
+    }
+    // -c が true の場合、行数を表示する。
+    if args.count {
+        println!("{matching_count}");
+    }
+}
+
+/// ファイルもしくは、標準入力を1行ずつ read し、マッチングを実行する関数
+fn match_file(
+    buf_reader: &mut dyn BufRead,
+    file: &str,
+    patterns: &Vec<String>,
+    ignore_case: bool,
+    invert_match: bool,
+    is_filename: bool,
+    is_count: bool
+) -> Option<i32> {
+    let mut matching_count: i32 = 0;
+    for result in buf_reader.lines() {
+        let line = match result {
+            Ok(line) => line,
+            Err(e) => {
+                eprint!("{}", FileError::FailedRead(e.to_string(), file.to_string()));
+                break
+            }
+        };
+
+        // read した行を指定したパターンとマッチ
+        for pattern in patterns {
+            match match_line(pattern.to_string(), line.to_owned(), ignore_case, invert_match) {
+                Ok(is_match) => {
+                    if is_match {
+                        matching_count += 1;
+                        if !is_count { // -c が指定されたときに、print の処理を飛ばすため。
+                            print(file.to_owned(), line, is_filename);
                         }
-                    },
-                    Err(e) => {
-                        eprintln!("Following error is occured in matching, pattern = '{pattern}', line = '{line}'\n{e}");
-                        return
+                        // マッチした場合はループを抜ける。
+                        // 1つのパターンとマッチした時点で、残りのパターンのマッチはしないため。
+                        break
                     }
+                },
+                Err(e) => {
+                    eprintln!("Following error is occured in matching, pattern = '{pattern}', line = '{line}'\n{e}");
+                    return None
                 }
             }
         }
     }
 
-    // -c が true の場合、行数を表示する。
-    if args.count {
-        println!("{matching_count}");
-    }
+    Some(matching_count)
 }
 
 /// 行を表示する関数  
@@ -117,4 +162,21 @@ fn is_print_filename(file_count: usize, no_filename: bool, with_filename: bool) 
     } else {
         !no_filename
     }
+}
+
+// ----- テストコード -----
+#[test]
+fn test_is_print_filename() {
+    // ファイル数が 1 で、オプションなし
+    assert_eq!(is_print_filename(1, false, false), false);
+    // ファイル数が 1 で、-h オプションあり
+    assert_eq!(is_print_filename(1, true, false), false);
+    // ファイル数が 1 で、-H オプションあり
+    assert_eq!(is_print_filename(1, false, true), true);
+    // ファイル数が 2(≒ 2以上) で、オプションなし
+    assert_eq!(is_print_filename(2, false, false), true);
+    // ファイル数が 2(≒ 2以上) で、-h オプションあり
+    assert_eq!(is_print_filename(2, true, false), false);
+    // ファイル数が 2(≒ 2以上) で、-H オプションあり
+    assert_eq!(is_print_filename(2, false, true), true);
 }

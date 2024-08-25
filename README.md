@@ -8,11 +8,13 @@ Rust製の正規表現コマンド。
 ```text
 regex [OPTIONS] PATTERN [FILE]
 regex [OPTIONS] [-e PATTERN] [FILE]
+command | regex PATTERN
+command | regex [-e PATTERN]
 ```
 
 ## 説明
 
-regex は FILE で名前を指定されたファイルを検索し、PATTERN にマッチする部分を含む行を探す。  
+regex は FILE で名前を指定されたファイル（もしくは標準入力）を検索し、PATTERN にマッチする部分を含む行を探す。  
 デフォルトの場合、マッチする部分を含む行を表示する。  
 
 ### 対応している正規表現
@@ -82,6 +84,10 @@ fuga fuga
 FUGA FUGA
 
 $ regex -e ho* -e fu* test.txt # 複数のパターンを指定(-eオプション)
+hoge hoge
+fuga fuga
+
+$ cat test.txt | regex -e ho* -e fu # パイプを使用し、前のコマンドの出力を検索
 hoge hoge
 fuga fuga
 ```

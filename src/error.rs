@@ -103,7 +103,6 @@ impl Display for RegexEngineError {
 #[derive(Debug)]
 pub enum CommandLineError {
     NoPattern,
-    NoFile,
     DuplicateFilenameOption,
 }
 
@@ -112,7 +111,6 @@ impl Display for CommandLineError {
     fn fmt (&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             CommandLineError::NoPattern => write!(f, "CommandLineError : No pattern specified."),
-            CommandLineError::NoFile => write!(f, "CommandLineError : No file specified."),
             CommandLineError::DuplicateFilenameOption => write!(f, "CommandLineError : -h, -H options are specified at the same time.")
         }
     }

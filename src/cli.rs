@@ -14,7 +14,7 @@ pub struct Args {
 
     #[arg(value_name = "FILE")]
     /// ファイルを指定する。
-    files: Vec<String>,
+    pub files: Vec<String>,
 
     #[arg(short = 'e', long = "regexp", value_name = "PATTERN")]
     /// パターンを指定する。このオプションを使用すれば複数のパターンを指定することができる
@@ -63,21 +63,10 @@ impl Args {
         } else { // -e オプションありの場合、位置引数の値を files に挿入する。
             match &self.pattern {
                 Some(file) => self.files.insert(0, file.to_owned()),
-                None => return Err(CommandLineError::NoFile)
+                None => {}
             }
         }
 
         Ok(&self.patterns)
-    }
-    
-    /// 位置引数に指定したファイルの配列を返す。
-    /// ファイルが指定されていない場合、エラーを返す。
-    /// & は、付けないと呼び出し時に所有権が移動するため、付けている。
-    pub fn get_files(&self) -> Result<&Vec<String>, CommandLineError> {
-        if !self.files.is_empty() {
-            Ok(&self.files)
-        } else {
-            Err(CommandLineError::NoFile)
-        }
     }
 }
