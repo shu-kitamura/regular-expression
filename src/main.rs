@@ -43,6 +43,8 @@ fn main() {
         }
     };
 
+    let is_print_filename: bool = is_print_filename(files.len(), args.no_filename, args.with_filename);
+
     // マッチした行数を数えるための変数
     // -c オプションが指定されたときに使う
     let mut matching_count: i32 = 0;
@@ -73,8 +75,8 @@ fn main() {
                     Ok(is_match) => {
                         if is_match {
                             matching_count += 1;
-                            if !args.count { // -c が指定されたときに、println の処理を飛ばすため。
-                                print(file.to_owned(), line, true);
+                            if !args.count { // -c が指定されたときに、print の処理を飛ばすため。
+                                print(file.to_owned(), line, is_print_filename);
                             }
                             // マッチした場合はループを抜ける。
                             // 1つのパターンとマッチした時点で、残りのパターンのマッチはしないため。
@@ -96,10 +98,23 @@ fn main() {
     }
 }
 
+/// 行を表示する関数  
+/// ファイル名を表示する・しないで処理が分岐するため、関数を分けた。
 fn print(filename: String, line: String, is_filename: bool) {
     if is_filename {
         println!("{filename} : {line}");
     } else {
         println!("{line}")
+    }
+}
+
+/// ファイル名を表示する・しないを判定するための関数  
+/// ファイル数が 1 の場合、 -H オプションに従う。  
+/// ファイル数が 2 以上の場合、 -h オプションに従う。  
+fn is_print_filename(file_count: usize, no_filename: bool, with_filename: bool) -> bool {
+    if file_count == 1 {
+        with_filename
+    } else {
+        !no_filename
     }
 }
