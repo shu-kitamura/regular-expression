@@ -67,7 +67,7 @@ fn main() {
                         if is_match {
                             matching_count += 1;
                             if !args.count { // -c が指定されたときに、println の処理を飛ばすため。
-                                println!("{line}");
+                                print(file.to_owned(), line, true);
                             }
                             // マッチした場合はループを抜ける。
                             // 1つのパターンとマッチした時点で、残りのパターンのマッチはしないため。
@@ -86,5 +86,13 @@ fn main() {
     // -c が true の場合、行数を表示する。
     if args.count {
         println!("{matching_count}");
+    }
+}
+
+fn print(filename: String, line: String, is_filename: bool) {
+    if is_filename {
+        println!("{filename} : {line}");
+    } else {
+        println!("{line}")
     }
 }
