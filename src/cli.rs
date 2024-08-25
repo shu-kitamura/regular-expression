@@ -32,6 +32,14 @@ pub struct Args {
     /// マッチしなかった行を表示する
     pub invert_match: bool,
 
+    #[arg(short = 'h', long = "no-filename")]
+    /// 出力する行の前にファイル名を付けない。検索ファイルが1つの場合、こちらがデフォルト
+    pub no_filename: bool,
+
+    #[arg(short = 'H', long = "with-filename")]
+    /// 出力する行の前にファイル名を付ける。検索ファイルが2つ以上の場合、こちらがデフォルト
+    pub with_filename: bool,
+    
     #[arg(long, action = ArgAction::Help)]
     /// help を表示する
     help: Option<bool>,
