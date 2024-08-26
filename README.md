@@ -52,12 +52,8 @@ PATTERN と入力ファイルの双方で、アルファベットの大文字と
 ## インストール
 
 以下の手順でインストールできる。  
-任意のディレクトリは、パス通っている必要がある。
 ```shell
-git clone https://github.com/shu-kitamura/regular-expression.git
-cd regular-expression
-cargo build
-mv target/debug/regex [任意のディレクトリ]
+cargo install --git https://github.com/shu-kitamura/regular-expression.git
 ```
 
 ## 使用例
