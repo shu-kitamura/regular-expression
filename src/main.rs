@@ -55,7 +55,7 @@ fn main() {
         // 標準入力を1行ずつ read し、マッチングを実行する
         match match_file(
             &mut buf_reader,
-            "",
+            "stdin",
             &patterns,
             args.ignore_case,
             args.invert_match,

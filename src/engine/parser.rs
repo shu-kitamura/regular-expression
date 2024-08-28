@@ -155,6 +155,7 @@ pub fn parse(pattern: &str) -> Result<AST, ParseError> {
     }
 
     if let Some(ast) = fold_or(seq_or) {
+        //println!("{:?}", ast);
         Ok(ast)
     } else {
         Err(ParseError::Empty)
