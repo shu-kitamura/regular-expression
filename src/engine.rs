@@ -44,6 +44,19 @@ fn match_string(insts: &Vec<Instruction>, string: &str) -> Result<bool, RegexEng
 /// 
 /// エラーが発生した場合 Err を返す。
 pub fn match_line(mut pattern: String, mut line: String, is_ignore_case: bool, is_invert_match: bool) -> Result<bool, RegexEngineError> {
+    // パターンが ^ で始まるかどうか。
+    // 始まる場合、行頭からのマッチのみ実行する。始まらない場合、行頭以外のマッチも実行する。
+    // どちらか判定するために使う。
+    let is_caret: bool = is_beginning_caret(&pattern);
+    if is_caret {
+        // パターンが ^ で始まる場合、^ を取り除く。
+        // AST に ^ が含まれないようにするための処理。
+        pattern = pattern
+                    .get(1..)
+                    .unwrap()
+                    .to_string();
+    }
+
     // -i が指定された場合の処理
     // パターンと行を小文字にすることで、区別をしないようにする
     if is_ignore_case {
@@ -63,34 +76,51 @@ pub fn match_line(mut pattern: String, mut line: String, is_ignore_case: bool, i
         Err(e) => return Err(RegexEngineError::CodeGenError(e)),
     };
 
-    for (i, _) in line.char_indices() {
-        // abcdefg という文字列の場合、以下のように順にマッチングする。
-        //     ループ1 : abcdefg
-        //     ループ2 : bcdefg
-        //     ・・・
-        //     ループN : g
-        let is_match: bool = match match_string(&code, &line[i..]) {
+    let mut is_match: bool = false;
+    // パターンの1文字目が ^ の場合、行頭からのマッチのみ実行する
+    if is_caret {
+        is_match = match match_string(&code, &line) {
             Ok(res) => res,
             Err(e) => return Err(e),
         };
+    } else {
+        for (i, _) in line.char_indices() {
+            // abcdefg という文字列の場合、以下のように順にマッチングする。
+            //     ループ1 : abcdefg
+            //     ループ2 : bcdefg
+            //     ・・・
+            //     ループN : g
+            is_match = match match_string(&code, &line[i..]) {
+                Ok(res) => res,
+                Err(e) => return Err(e),
+            };
 
-        // マッチングが成功した場合の処理
-        if is_match {
-            // -v が指定されている場合は false、指定されていない場合は true を返す 
-            if is_invert_match {
-                return Ok(false)
-            } else {
-                return Ok(true)
+            // マッチングが成功した場合、ループを抜ける
+            if is_match {
+                break
             }
         }
     }
 
-    // for文を抜ける = マッチングが失敗する のため、
-    // -v が指定されている場合は true、指定されていない場合は false を返す
-    if is_invert_match {
-        Ok(true)
+    Ok(invert_match_result(is_match, is_invert_match))
+}
+
+/// パターンが ^ で始まるかどうかを返す関数
+fn is_beginning_caret(pattern: &str) -> bool {
+    if let Some(beginning) = pattern.get(..1) {
+        "^" == beginning
     } else {
-        Ok(false)
+        false
+    }
+}
+
+/// マッチ結果を反転させる関数  
+/// -v オプションが指定された場合、反転させる必要がある。  
+fn invert_match_result(match_result: bool, is_invert: bool) -> bool {
+    if is_invert {
+        !match_result
+    } else {
+        match_result
     }
 }
 
@@ -176,6 +206,25 @@ fn test_match_invert() {
 }
 
 #[test]
+fn test_match_line_biginning_caret() {
+    let actual: bool = match_line(
+        "^ab*(c|d)".to_string(),
+        "abbbbccd".to_string(),
+        false,
+        false,
+    ).unwrap();
+    assert_eq!(actual, true);
+
+    let actual: bool = match_line(
+        "^b*(c|d)".to_string(),
+        "abbbbccd".to_string(),
+        false,
+        false,
+    ).unwrap();
+    assert_eq!(actual, false);
+}
+
+#[test]
 fn test_match_line_parse_error() {
     use super::error::ParseError;
 
@@ -186,4 +235,34 @@ fn test_match_line_parse_error() {
         false
     );
     assert_eq!(actual, Err(RegexEngineError::ParseError(ParseError::NoRightParen)));
+}
+
+#[test]
+fn test_is_beginning_caret_true() {
+    let actual: bool = is_beginning_caret("^abc");
+    assert_eq!(actual, true);
+}
+
+#[test]
+fn test_is_beginning_caret_false() {
+    let actual: bool = is_beginning_caret("abc");
+    assert_eq!(actual, false);
+}
+
+#[test]
+fn test_invert_match_result_true() {
+    let actual: bool = invert_match_result(true, false);
+    assert_eq!(actual, true);
+
+    let actual: bool = invert_match_result(false, true);
+    assert_eq!(actual, true);
+}
+
+#[test]
+fn test_invert_match_result_false() {
+    let actual: bool = invert_match_result(true, true);
+    assert_eq!(actual, false);
+
+    let actual: bool = invert_match_result(false, false);
+    assert_eq!(actual, false);
 }

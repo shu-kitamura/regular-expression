@@ -24,7 +24,7 @@ use crate::{
 #[derive(Default, Debug)]
 struct Generator {
     p_counter: usize,
-    instructions: Vec<Instruction>,
+    instructions: Vec<Instruction>
 }
 
 impl Generator {
@@ -58,6 +58,7 @@ impl Generator {
         }
     }
 
+    /// AST::Period 型に対応する Instruction を生成し、instractions に push する
     fn gen_period(&mut self) -> Result<(), CodeGenError> {
         self.instructions.push(Instruction::Period);
         self.increment_p_counter()
