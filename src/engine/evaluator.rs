@@ -71,6 +71,15 @@ fn eval_depth(
                     return Ok(false);
                 }
             }
+            Instruction::Period => {
+                match increment_pc_and_index(&mut p_counter, &mut char_index) {
+                    Ok(()) => {},
+                    Err(e) => return Err(e)
+                }
+                if chars.len() < char_index {
+                    return Ok(false)
+                }
+            }
         }
     }
 }

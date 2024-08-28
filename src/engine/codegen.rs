@@ -37,6 +37,7 @@ impl Generator {
     fn gen_expr(&mut self, ast: &AST) -> Result<(), CodeGenError> {
         match ast {
             AST::Char(c) => self.gen_char(*c),
+            AST::Period => self.gen_period(),
             AST::Or(e1, e2) => self.gen_or(e1, e2),
             AST::Plus(ast) => self.gen_plus(ast),
             AST::Star(ast) => self.gen_star(ast),
@@ -55,6 +56,11 @@ impl Generator {
             },
             Err(e) => Err(e),
         }
+    }
+
+    fn gen_period(&mut self) -> Result<(), CodeGenError> {
+        self.instructions.push(Instruction::Period);
+        self.increment_p_counter()
     }
 
     /// AST::Star 型に対応する Instruction を生成し、instructions に push する  
@@ -252,7 +258,9 @@ impl Generator {
 pub fn get_code(ast: &AST) -> Result<Vec<Instruction>, CodeGenError> {
     let mut generator = Generator::default();
     match generator.gen_code(ast) {
-        Ok(()) => Ok(generator.instructions),
+        Ok(()) => {
+            Ok(generator.instructions)
+        },
         Err(e) => Err(e)
     }
 }
@@ -307,6 +315,18 @@ fn test_gen_char_failure() {
 
     let actual = generator.gen_char('a');
     assert_eq!(actual, expect);
+}
+
+#[test]
+fn test_gen_period() {
+    let expect: Vec<Instruction> = vec![Instruction::Period];
+
+    let mut generator: Generator = Generator {
+        p_counter: 0,
+        instructions : Vec::new()
+    };
+    let _ = generator.gen_period();
+    assert_eq!(generator.instructions, expect)
 }
 
 #[test]

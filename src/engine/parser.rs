@@ -29,6 +29,7 @@ use crate::error::ParseError;
 #[derive(Debug, PartialEq)]
 pub enum AST {
     Char(char),
+    Period,
     Plus(Box<AST>),
     Star(Box<AST>),
     Question(Box<AST>),
@@ -47,7 +48,7 @@ enum Qualifier {
 /// エスケープ文字から AST を生成
 fn parse_escape(pos: usize, c: char) -> Result<AST, ParseError> {
     match c {
-        '\\' | '(' | ')' | '|' | '+' | '*' | '?' => Ok(AST::Char(c)),
+        '\\' | '(' | ')' | '|' | '+' | '*' | '?' | '.'=> Ok(AST::Char(c)),
         _ => Err(ParseError::InvalidEscape(pos, c)),
     }
 }
@@ -115,8 +116,8 @@ pub fn parse(pattern: &str) -> Result<AST, ParseError> {
                 }
             },
             '(' => {
-                let prev = take(&mut seq);
-                let prev_or = take(&mut seq_or);
+                let prev: Vec<AST> = take(&mut seq);
+                let prev_or: Vec<AST> = take(&mut seq_or);
                 stack.push((prev, prev_or));
             },
             ')' => {
@@ -140,6 +141,7 @@ pub fn parse(pattern: &str) -> Result<AST, ParseError> {
                 seq_or.push(AST::Seq(prev));
             },
             '\\' => is_escape = true,
+            '.' => seq.push(AST::Period),
             _ => seq.push(AST::Char(c))
         };
     }
@@ -295,7 +297,11 @@ fn test_parse_normal_string() {
 #[test]
 fn test_parse_contain_qualifier() {
     // ----- "abc+" が入力されたケース -----
-    let expect: AST = AST::Seq(vec![AST::Char('a'), AST::Char('b'), AST::Plus(Box::new(AST::Char('c')))]);
+    let expect: AST = AST::Seq(vec![
+        AST::Char('a'),
+        AST::Char('b'),
+        AST::Plus(Box::new(AST::Char('c')))
+    ]);
     // テスト対象を実行
     let pattern: &str = "abc+";
     let actual: AST = parse(pattern).unwrap();
@@ -336,6 +342,21 @@ fn test_parse_contain_paran() {
     ]);
     // テスト対象を実行
     let pattern: &str = "abc(def|ghi)";
+    let actual: AST = parse(pattern).unwrap();
+
+    assert_eq!(actual, expect);
+}
+
+#[test]
+fn test_parse_contain_period() {
+    // ----- "a.c" が入力されたケース-----
+    let expect: AST = AST::Seq(vec![
+        AST::Char('a'),
+        AST::Period,
+        AST::Char('c'),
+    ]);
+    // テスト対象を実行
+    let pattern: &str = "a.c";
     let actual: AST = parse(pattern).unwrap();
 
     assert_eq!(actual, expect);
