@@ -38,6 +38,7 @@ fn eval_depth(
     chars: &Vec<char>,
     mut p_counter: usize,
     mut char_index: usize,
+    is_end_doller: bool
 ) -> Result<bool, EvalError> {
     loop {
         // Instruction を取得
@@ -59,13 +60,18 @@ fn eval_depth(
                 };
             }
             Instruction::Match => {
-                return Ok(true);
+                if is_end_doller {
+                    return Ok(chars.len() == char_index)
+                } else {
+                    return Ok(true)
+                }
             }
             Instruction::Jump(addr) => {
                 p_counter = *addr;
             }
             Instruction::Split(addr1, addr2) => {
-                if eval_depth(instructions, chars, *addr1, char_index)? || eval_depth(instructions, chars, *addr2, char_index)? {
+                if eval_depth(instructions, chars, *addr1, char_index, is_end_doller)?
+                    || eval_depth(instructions, chars, *addr2, char_index, is_end_doller)? {
                     return Ok(true);
                 } else {
                     return Ok(false);
@@ -87,8 +93,8 @@ fn eval_depth(
 
 
 /// 命令列の評価を行う関数
-pub fn eval(inst: &[Instruction], chars:&Vec<char>) -> Result<bool, EvalError> {
-    eval_depth(inst, chars, 0, 0)
+pub fn eval(inst: &[Instruction], chars:&Vec<char>, is_end_doller: bool) -> Result<bool, EvalError> {
+    eval_depth(inst, chars, 0, 0, is_end_doller)
 }
 
 // ----- テストコード -----
@@ -146,12 +152,12 @@ fn test_eval_depth_true() {
     // "abc" とマッチするケース
     let chars1:Vec<char> = vec!['a', 'b', 'c'];
     
-    let actual1 = eval_depth(&insts, &chars1, 0, 0).unwrap();
+    let actual1 = eval_depth(&insts, &chars1, 0, 0, false).unwrap();
     assert_eq!(actual1, true);
 
     // "abd"とマッチするケース
     let chars2:Vec<char> = vec!['a', 'b', 'c'];
-    let actual2 = eval_depth(&insts, &chars2, 0, 0).unwrap();
+    let actual2 = eval_depth(&insts, &chars2, 0, 0, false).unwrap();
     assert_eq!(actual2, true);
 }
 
@@ -171,15 +177,41 @@ fn test_eval_depth_false() {
     // "abx" とマッチするケース
     let chars:Vec<char> = vec!['a', 'b', 'X'];
 
-    let actual = eval_depth(&insts, &chars, 0, 0).unwrap();
+    let actual = eval_depth(&insts, &chars, 0, 0, false).unwrap();
     assert_eq!(actual, false);
 }
+
+#[test]
+fn test_eval_depth_is_end_doller() {
+    // "ab(c|d)" が入力された Instraction
+    let insts: Vec<Instruction> = vec![
+        Instruction::Char('a'),
+        Instruction::Char('b'),
+        Instruction::Split(3, 5),
+        Instruction::Char('c'),
+        Instruction::Jump(6),
+        Instruction::Char('d'),
+        Instruction::Match
+    ];
+
+    // "xxxabc" とマッチするケース (true になる)
+    let chars1:Vec<char> = vec!['a', 'b', 'c'];
+    
+    let actual1: bool = eval_depth(&insts, &chars1, 0, 0, true).unwrap();
+    assert_eq!(actual1, true);
+
+    // "abcxxx"とマッチするケース (false になる)
+    let chars2:Vec<char> = vec!['a', 'b', 'c', 'x', 'x', 'x'];
+    let actual2: bool = eval_depth(&insts, &chars2, 0, 0, true).unwrap();
+    assert_eq!(actual2, false);
+}
+
 
 #[test]
 fn test_eval_depth_invalidpc() {
     let insts: Vec<Instruction> = vec![Instruction::Char('a'), Instruction::Char('b'), Instruction::Match];
     let chars:Vec<char> =vec!['a', 'b', 'c', 'd'];
 
-    let actual = eval_depth(&insts, &chars, 18446744073709551615, 0);
+    let actual = eval_depth(&insts, &chars, 18446744073709551615, 0, false);
     assert_eq!(actual, Err(EvalError::InvalidPC));
 }

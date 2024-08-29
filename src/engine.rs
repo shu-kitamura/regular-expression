@@ -17,9 +17,9 @@ use crate::{
 };
 
 /// 文字列のマッチングを実行する。
-fn match_string(insts: &Vec<Instruction>, string: &str) -> Result<bool, RegexEngineError> {
+fn match_string(insts: &Vec<Instruction>, string: &str, is_end_doller: bool) -> Result<bool, RegexEngineError> {
     let charcters: Vec<char> = string.chars().collect();
-    let match_result: bool = match eval(&insts, &charcters) {
+    let match_result: bool = match eval(&insts, &charcters, is_end_doller) {
         Ok(res) => res,
         Err(e) => return Err(RegexEngineError::EvalError(e))
     };
@@ -43,7 +43,12 @@ fn match_string(insts: &Vec<Instruction>, string: &str) -> Result<bool, RegexEng
 /// ※ -v オプションが指定されている場合は true/false が反対になる。  
 /// 
 /// エラーが発生した場合 Err を返す。
-pub fn match_line(mut pattern: String, mut line: String, is_ignore_case: bool, is_invert_match: bool) -> Result<bool, RegexEngineError> {
+pub fn match_line(
+    mut pattern: String,
+    mut line: String,
+    is_ignore_case: bool,
+    is_invert_match: bool
+    ) -> Result<bool, RegexEngineError> {
     // パターンが ^ で始まるかどうか。
     // 始まる場合、行頭からのマッチのみ実行する。始まらない場合、行頭以外のマッチも実行する。
     // どちらか判定するために使う。
@@ -55,6 +60,18 @@ pub fn match_line(mut pattern: String, mut line: String, is_ignore_case: bool, i
                     .get(1..)
                     .unwrap()
                     .to_string();
+    }
+
+    // パターンが $ で終わるかどうか。
+    // 始まる場合、行末かどうかチェックをマッチに含める。
+    let is_doller: bool = is_end_doller(&pattern);
+    if is_doller {
+        // パターンが $ で終わる場合、$ を取り除く。
+        // AST に $ が含まれないようにするための処理。
+        pattern = pattern
+                        .get(..pattern.len()-1)
+                        .unwrap()
+                        .to_string();
     }
 
     // -i が指定された場合の処理
@@ -79,7 +96,7 @@ pub fn match_line(mut pattern: String, mut line: String, is_ignore_case: bool, i
     let mut is_match: bool = false;
     // パターンの1文字目が ^ の場合、行頭からのマッチのみ実行する
     if is_caret {
-        is_match = match match_string(&code, &line) {
+        is_match = match match_string(&code, &line, is_doller) {
             Ok(res) => res,
             Err(e) => return Err(e),
         };
@@ -90,7 +107,7 @@ pub fn match_line(mut pattern: String, mut line: String, is_ignore_case: bool, i
             //     ループ2 : bcdefg
             //     ・・・
             //     ループN : g
-            is_match = match match_string(&code, &line[i..]) {
+            is_match = match match_string(&code, &line[i..], is_doller) {
                 Ok(res) => res,
                 Err(e) => return Err(e),
             };
@@ -109,6 +126,16 @@ pub fn match_line(mut pattern: String, mut line: String, is_ignore_case: bool, i
 fn is_beginning_caret(pattern: &str) -> bool {
     if let Some(beginning) = pattern.get(..1) {
         "^" == beginning
+    } else {
+        false
+    }
+}
+
+/// パターンが $ で終わるかどうかを返す関数
+fn is_end_doller(pattern: &str) -> bool {
+    let length: usize = pattern.len();
+    if let Some(end) = pattern.get(length-1..length) {
+        "$" == end
     } else {
         false
     }
@@ -135,7 +162,7 @@ fn test_match_string_true() {
         Instruction::Char('d'),
         Instruction::Match
     ];
-    let actual: bool = match_string(&insts, "abc").unwrap();
+    let actual: bool = match_string(&insts, "abc", false).unwrap();
     assert_eq!(actual, true);
 }
 
@@ -150,7 +177,7 @@ fn test_match_string_false() {
         Instruction::Char('d'),
         Instruction::Match
     ];
-    let actual: bool = match_string(&insts, "abx").unwrap();
+    let actual: bool = match_string(&insts, "abx", false).unwrap();
     assert_eq!(actual, false);
 }
 
@@ -168,7 +195,7 @@ fn test_match_string_eval_error() {
         Instruction::Match
     ];
 
-    let actual = match_string(&insts, "abc");    
+    let actual = match_string(&insts, "abc", false);    
     assert_eq!(actual, Err(RegexEngineError::EvalError(EvalError::InvalidPC)));
 }
 
@@ -207,21 +234,48 @@ fn test_match_invert() {
 
 #[test]
 fn test_match_line_biginning_caret() {
-    let actual: bool = match_line(
+    // a で始まり、bの0回以上の繰り返し、 c があるので、マッチすることを期待。
+    // (true を期待するケース)
+    let actual1: bool = match_line(
         "^ab*(c|d)".to_string(),
         "abbbbccd".to_string(),
         false,
         false,
     ).unwrap();
-    assert_eq!(actual, true);
+    assert_eq!(actual1, true);
 
-    let actual: bool = match_line(
+    // a で始まっていないので、マッチしないことを期待。
+    // (false を期待するケース)
+    let actual2: bool = match_line(
         "^b*(c|d)".to_string(),
         "abbbbccd".to_string(),
         false,
         false,
     ).unwrap();
-    assert_eq!(actual, false);
+    assert_eq!(actual2, false);
+}
+
+#[test]
+fn test_match_line_is_end_doller() {
+    // パターンと一致する部分(abd)が行末なので、マッチすることを期待。
+    // (true を期待するケース)
+    let actual1: bool = match_line(
+        "ab(c|d)$".to_string(),
+        "asdfabd".to_string(),
+        false,
+        false,
+    ).unwrap();
+    assert_eq!(actual1, true);
+
+    // パターンと一致する部分(abc)が行末ではないので、マッチしないことを期待。
+    // (false を期待するケース)
+    let actual2: bool = match_line(
+        "ab(c|d)$".to_string(),
+        "asdfabdxxx".to_string(),
+        false,
+        false,
+    ).unwrap();
+    assert_eq!(actual2, false);
 }
 
 #[test]
@@ -239,13 +293,25 @@ fn test_match_line_parse_error() {
 
 #[test]
 fn test_is_beginning_caret_true() {
-    let actual: bool = is_beginning_caret("^abc");
+    let actual: bool = is_beginning_caret("^pattern");
     assert_eq!(actual, true);
 }
 
 #[test]
 fn test_is_beginning_caret_false() {
-    let actual: bool = is_beginning_caret("abc");
+    let actual: bool = is_beginning_caret("pattern");
+    assert_eq!(actual, false);
+}
+
+#[test]
+fn test_is_end_doller_true() {
+    let actual: bool = is_end_doller("pattern$");
+    assert_eq!(actual, true);
+}
+
+#[test]
+fn test_is_end_doller_false() {
+    let actual: bool = is_end_doller("pattern");
     assert_eq!(actual, false);
 }
 
