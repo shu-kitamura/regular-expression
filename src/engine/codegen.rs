@@ -47,6 +47,13 @@ impl Generator {
                     } else {
                         self.gen_expr(ast)
                     }
+                AST::Or(child_ast1, child_ast2 ) => {
+                    match self.gen_expr(&child_ast1){
+                        Ok(()) => {},
+                        Err(e) => return Err(e),
+                    };
+                    self.gen_expr(&child_ast2)
+                }
                 e => self.gen_plus(e)
             },
             AST::Star(ast) => match &**ast {
@@ -57,6 +64,13 @@ impl Generator {
                     } else {
                         self.gen_expr(ast)
                     }
+                AST::Or(child_ast1, child_ast2 ) => {
+                    match self.gen_expr(&child_ast1){
+                        Ok(()) => {},
+                        Err(e) => return Err(e),
+                    };
+                    self.gen_expr(&child_ast2)
+                }    
                 e => self.gen_star(e)
             },
             AST::Question(ast) => self.gen_question(ast),
