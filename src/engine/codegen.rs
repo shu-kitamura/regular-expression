@@ -241,7 +241,7 @@ impl Generator {
             return Err(CodeGenError::FailOr);
         }
 
-        // 1つ目の AST を再帰的に処理する
+        // 2つ目の AST を再帰的に処理する
         match self.gen_expr(expr2) {
             Ok(()) => {},
             Err(e) => return Err(e),
