@@ -277,7 +277,7 @@ impl Generator {
 pub fn get_code(ast: &AST) -> Result<Vec<Instruction>, CodeGenError> {
     let mut generator = Generator::default();
     match generator.gen_code(ast) {
-        Ok(()) => {Ok(generator.instructions)},
+        Ok(()) => {println!("{:?}", generator.instructions);Ok(generator.instructions)},
         Err(e) => Err(e)
     }
 }
