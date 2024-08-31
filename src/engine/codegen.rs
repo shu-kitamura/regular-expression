@@ -382,6 +382,23 @@ fn test_gen_star_success() {
 }
 
 #[test]
+fn test_gen_star_failure() {
+    // a* が入力されたケース
+    let expect:Result<(), CodeGenError>  = Err(CodeGenError::FailStar);
+
+    let mut generator: Generator = Generator {
+        p_counter: 100,
+        instructions : Vec::new()
+    };
+
+    let ast: Box<AST> = Box::new(AST::Char('a'));
+
+    let actual: Result<(), CodeGenError> = generator.gen_star(&ast);
+    assert_eq!(actual, expect);
+}
+
+
+#[test]
 fn test_gen_plus_success() {
     // a+ が入力されたケース
     let expect: Vec<Instruction> = vec![
@@ -422,6 +439,21 @@ fn test_gen_question_success() {
 }
 
 #[test]
+fn test_gen_question_failure() {
+    let expect:Result<(), CodeGenError>  = Err(CodeGenError::FailQuestion);
+
+    let mut generator: Generator = Generator {
+        p_counter: 100,
+        instructions : Vec::new()
+    };
+    let ast: Box<AST> = Box::new(AST::Char('a'));
+
+    let actual: Result<(), CodeGenError> = generator.gen_question(&ast);
+    assert_eq!(actual, expect);
+}
+
+
+#[test]
 fn test_gen_or_success() {
     // a|b が入力されたケース
     let expect: Vec<Instruction> = vec![
@@ -441,6 +473,22 @@ fn test_gen_or_success() {
 
     let _ = generator.gen_or(&e1, &e2);
     let actual: Vec<Instruction> = generator.instructions;
+    assert_eq!(actual, expect);
+}
+
+#[test]
+fn test_gen_or_failure() {
+    let expect:Result<(), CodeGenError>  = Err(CodeGenError::FailOr);
+
+    let mut generator: Generator = Generator {
+        p_counter: 100,
+        instructions : Vec::new()
+    };
+
+    let e1: Box<AST> = Box::new(AST::Seq(vec![AST::Char('a')]));
+    let e2: Box<AST> = Box::new(AST::Seq(vec![AST::Char('b')]));
+
+    let actual: Result<(), CodeGenError> = generator.gen_or(&e1, &e2);
     assert_eq!(actual, expect);
 }
 
