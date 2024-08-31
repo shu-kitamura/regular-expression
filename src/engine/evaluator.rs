@@ -70,6 +70,9 @@ fn eval_depth(
                 p_counter = *addr;
             }
             Instruction::Split(addr1, addr2) => {
+                if chars.len() <= char_index {
+                    return Ok(false)
+                }
                 if eval_depth(instructions, chars, *addr1, char_index, is_end_doller)?
                     || eval_depth(instructions, chars, *addr2, char_index, is_end_doller)? {
                     return Ok(true);
@@ -89,8 +92,6 @@ fn eval_depth(
         }
     }
 }
-
-
 
 /// 命令列の評価を行う関数
 pub fn eval(inst: &[Instruction], chars:&Vec<char>, is_end_doller: bool) -> Result<bool, EvalError> {
