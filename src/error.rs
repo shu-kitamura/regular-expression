@@ -117,20 +117,3 @@ impl Display for CommandLineError {
 }
 
 impl Error for CommandLineError {}
-
-/// ファイルを read する処理で使用するエラーの型
-#[derive(Debug, PartialEq)]
-pub enum FileError {
-    FailedOpen(String, String),
-    FailedRead(String, String),
-}
-
-/// FileReadErrorを表示するため、Displayトレイトを実装
-impl Display for FileError {
-    fn fmt (&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            FileError::FailedOpen(msg, filename) => write!(f, "FileError : Failed to open '{filename}' with following message.\n{msg}."),
-            FileError::FailedRead(msg, filename) => write!(f, "FileError : Failed to read '{filename}' with following message.\n{msg}.")
-        }
-    }
-}

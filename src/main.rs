@@ -1,7 +1,6 @@
 mod engine;
 mod error;
 mod cli;
-mod fileread;
 
 use std::{
     fs::File,
@@ -17,8 +16,6 @@ use error::CommandLineError;
 use crate::{
     cli::Args,
     engine::match_line,
-    error::FileError,
-    fileread::open_file,
 };
 
 fn main() {
@@ -68,8 +65,8 @@ fn main() {
     } else {
         for file in files {
             // ファイルをオープンする
-            let mut buf_reader: BufReader<File> = match open_file(file) {
-                Ok(reader) => reader,
+            let mut buf_reader: BufReader<File> = match File::open(file) {
+                Ok(reader) => BufReader::new(reader),
                 Err(e) => {
                     eprintln!("{e}");
                     continue;
@@ -113,7 +110,7 @@ fn match_file(
         let line = match result {
             Ok(line) => line,
             Err(e) => {
-                eprint!("{}", FileError::FailedRead(e.to_string(), file.to_string()));
+                eprint!("{e}");
                 break
             }
         };
