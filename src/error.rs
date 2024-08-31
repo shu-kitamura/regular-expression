@@ -47,8 +47,8 @@ impl Error for ParseError {} // デフォルト実装を使うだけの場合、
 pub enum CodeGenError {
     PCOverFlow,   // コード生成中にオーバーフローが起きた場合のエラー
     FailStar,     // * のコード生成エラー
-    FailOr,       // | のコード生成エラー
     FailQuestion, // ? のコード生成エラー
+    FailOr,       // | のコード生成エラー
 }
 
 /// CodeGenErrorを表示するため、Displayトレイトを実装

@@ -39,8 +39,26 @@ impl Generator {
             AST::Char(c) => self.gen_char(*c),
             AST::Period => self.gen_period(),
             AST::Or(e1, e2) => self.gen_or(e1, e2),
-            AST::Plus(ast) => self.gen_plus(ast),
-            AST::Star(ast) => self.gen_star(ast),
+            AST::Plus(ast) => match &**ast {
+                AST::Star(child_ast) => self.gen_expr(&child_ast),
+                AST::Seq(child_vec) if child_vec.len() == 1 =>
+                    if let Some(child_ast @ AST::Star(_)) = child_vec.get(0) {
+                        self.gen_expr(&child_ast)
+                    } else {
+                        self.gen_expr(ast)
+                    }
+                e => self.gen_plus(e)
+            },
+            AST::Star(ast) => match &**ast {
+                AST::Star(child_ast) => self.gen_expr(&child_ast),
+                AST::Seq(child_vec) if child_vec.len() == 1 =>
+                    if let Some(child_ast @ AST::Star(_)) = child_vec.get(0) {
+                        self.gen_expr(&child_ast)
+                    } else {
+                        self.gen_expr(ast)
+                    }
+                e => self.gen_star(e)
+            },
             AST::Question(ast) => self.gen_question(ast),
             AST::Seq(v) => self.gen_seq(v),
         }
@@ -259,7 +277,7 @@ impl Generator {
 pub fn get_code(ast: &AST) -> Result<Vec<Instruction>, CodeGenError> {
     let mut generator = Generator::default();
     match generator.gen_code(ast) {
-        Ok(()) => {println!("{:?}",generator.instructions);Ok(generator.instructions)},
+        Ok(()) => {Ok(generator.instructions)},
         Err(e) => Err(e)
     }
 }
