@@ -15,7 +15,7 @@ use crate::{
     error::CodeGenError,
     engine::{
         helper::safe_add,
-        instruction::Instruction,
+        instruction::{Instruction, Char},
         parser::AST,
     }
 };
@@ -36,8 +36,8 @@ impl Generator {
     /// 入力された AST の型に応じて、Instruction を生成する関数を実行する
     fn gen_expr(&mut self, ast: &AST) -> Result<(), CodeGenError> {
         match ast {
+            AST::AnyChar => self.gen_anychar(),
             AST::Char(c) => self.gen_char(*c),
-            AST::Period => self.gen_period(),
             AST::Or(e1, e2) => self.gen_or(e1, e2),
             AST::Plus(ast) => match &**ast {
                 AST::Star(child_ast) => self.gen_expr(&child_ast),
@@ -80,7 +80,7 @@ impl Generator {
 
     /// AST::Char 型に対応する Instruction を生成し、instructions に push する
     fn gen_char(&mut self, c: char) -> Result<(), CodeGenError> {
-        let inst: Instruction = Instruction::Char(c);
+        let inst: Instruction = Instruction::Char(Char::Literal(c));
         match self.increment_p_counter() {
             Ok(()) => {
                 self.instructions.push(inst);
@@ -90,10 +90,16 @@ impl Generator {
         }
     }
 
-    /// AST::Period 型に対応する Instruction を生成し、instractions に push する
-    fn gen_period(&mut self) -> Result<(), CodeGenError> {
-        self.instructions.push(Instruction::Period);
-        self.increment_p_counter()
+    /// AST::AnyChar 型に対応する Instruction を生成し、instractions に push する
+    fn gen_anychar(&mut self) -> Result<(), CodeGenError> {
+        let inst: Instruction = Instruction::Char(Char::Any);
+        match self.increment_p_counter() {
+            Ok(()) => {
+                self.instructions.push(inst);
+                Ok(())
+            },
+            Err(e) => Err(e),
+        }
     }
 
     /// AST::Star 型に対応する Instruction を生成し、instructions に push する  
@@ -291,7 +297,7 @@ impl Generator {
 pub fn get_code(ast: &AST) -> Result<Vec<Instruction>, CodeGenError> {
     let mut generator = Generator::default();
     match generator.gen_code(ast) {
-        Ok(()) => {println!("{:?}", generator.instructions);Ok(generator.instructions)},
+        Ok(()) => Ok(generator.instructions),
         Err(e) => Err(e)
     }
 }
@@ -325,7 +331,7 @@ fn test_increment_p_counter_failure() {
 
 #[test]
 fn test_gen_char_success() {
-    let expect: Vec<Instruction> = vec![Instruction::Char('a')];
+    let expect: Vec<Instruction> = vec![Instruction::Char(Char::Literal('a'))];
     let mut generator: Generator = Generator {
         p_counter: 0,
         instructions : Vec::new()
@@ -349,14 +355,14 @@ fn test_gen_char_failure() {
 }
 
 #[test]
-fn test_gen_period() {
-    let expect: Vec<Instruction> = vec![Instruction::Period];
+fn test_gen_anychar() {
+    let expect: Vec<Instruction> = vec![Instruction::Char(Char::Any)];
 
     let mut generator: Generator = Generator {
         p_counter: 0,
         instructions : Vec::new()
     };
-    let _ = generator.gen_period();
+    let _ = generator.gen_anychar();
     assert_eq!(generator.instructions, expect)
 }
 
@@ -365,7 +371,7 @@ fn test_gen_star_success() {
     // a* が入力されたケース
     let expect: Vec<Instruction> = vec![
         Instruction::Split(1, 3),
-        Instruction::Char('a'),
+        Instruction::Char(Char::Literal('a')),
         Instruction::Jump(0),
     ];
 
@@ -402,7 +408,7 @@ fn test_gen_star_failure() {
 fn test_gen_plus_success() {
     // a+ が入力されたケース
     let expect: Vec<Instruction> = vec![
-        Instruction::Char('a'),
+        Instruction::Char(Char::Literal('a')),
         Instruction::Split(0, 2),
     ];
 
@@ -423,7 +429,7 @@ fn test_gen_question_success() {
     // a+ が入力されたケース
     let expect: Vec<Instruction> = vec![
         Instruction::Split(1, 2),
-        Instruction::Char('a'),
+        Instruction::Char(Char::Literal('a')),
     ];
 
     let mut generator: Generator = Generator {
@@ -458,9 +464,9 @@ fn test_gen_or_success() {
     // a|b が入力されたケース
     let expect: Vec<Instruction> = vec![
         Instruction::Split(1, 3),
-        Instruction::Char('a'),
+        Instruction::Char(Char::Literal('a')),
         Instruction::Jump(4),
-        Instruction::Char('b'),
+        Instruction::Char(Char::Literal('b')),
     ];
 
     let mut generator: Generator = Generator {
@@ -495,9 +501,9 @@ fn test_gen_or_failure() {
 #[test]
 fn test_gen_seq_success() {
     let expect: Vec<Instruction> = vec![
-        Instruction::Char('a'),
-        Instruction::Char('b'),
-        Instruction::Char('c'),
+        Instruction::Char(Char::Literal('a')),
+        Instruction::Char(Char::Literal('b')),
+        Instruction::Char(Char::Literal('c')),
     ];
 
     let v: Vec<AST> = vec![AST::Char('a'), AST::Char('b'), AST::Char('c')];
@@ -517,9 +523,9 @@ fn test_gen_code_success() {
     // a|b が入力されたケース
     let expect: Vec<Instruction> = vec![
         Instruction::Split(1, 3),
-        Instruction::Char('a'),
+        Instruction::Char(Char::Literal('a')),
         Instruction::Jump(4),
-        Instruction::Char('b'),
+        Instruction::Char(Char::Literal('b')),
         Instruction::Match
     ];
 
@@ -541,9 +547,9 @@ fn test_gen_code_success() {
 fn test_get_code_success() {
     let expect: Vec<Instruction> = vec![
         Instruction::Split(1, 3),
-        Instruction::Char('a'),
+        Instruction::Char(Char::Literal('a')),
         Instruction::Jump(4),
-        Instruction::Char('b'),
+        Instruction::Char(Char::Literal('b')),
         Instruction::Match
     ];
 

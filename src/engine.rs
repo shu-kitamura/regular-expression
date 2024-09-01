@@ -154,12 +154,12 @@ fn invert_match_result(match_result: bool, is_invert: bool) -> bool {
 #[test]
 fn test_match_string_true() {
     let insts: Vec<Instruction> = vec![
-        Instruction::Char('a'),
-        Instruction::Char('b'),
+        Instruction::Char(instruction::Char::Literal('a')),
+        Instruction::Char(instruction::Char::Literal('b')),
         Instruction::Split(3, 5),
-        Instruction::Char('c'),
+        Instruction::Char(instruction::Char::Literal('c')),
         Instruction::Jump(6),
-        Instruction::Char('d'),
+        Instruction::Char(instruction::Char::Literal('d')),
         Instruction::Match
     ];
     let actual: bool = match_string(&insts, "abc", false).unwrap();
@@ -169,12 +169,12 @@ fn test_match_string_true() {
 #[test]
 fn test_match_string_false() {
     let insts: Vec<Instruction> = vec![
-        Instruction::Char('a'),
-        Instruction::Char('b'),
+        Instruction::Char(instruction::Char::Literal('a')),
+        Instruction::Char(instruction::Char::Literal('b')),
         Instruction::Split(3, 5),
-        Instruction::Char('c'),
+        Instruction::Char(instruction::Char::Literal('c')),
         Instruction::Jump(6),
-        Instruction::Char('d'),
+        Instruction::Char(instruction::Char::Literal('d')),
         Instruction::Match
     ];
     let actual: bool = match_string(&insts, "abx", false).unwrap();
@@ -186,12 +186,12 @@ fn test_match_string_eval_error() {
     use super::error::EvalError;
 
     let insts: Vec<Instruction> = vec![
-        Instruction::Char('a'),
-        Instruction::Char('b'),
+        Instruction::Char(instruction::Char::Literal('a')),
+        Instruction::Char(instruction::Char::Literal('b')),
         Instruction::Split(100, 200),
-        Instruction::Char('c'),
+        Instruction::Char(instruction::Char::Literal('c')),
         Instruction::Jump(6),
-        Instruction::Char('d'),
+        Instruction::Char(instruction::Char::Literal('d')),
         Instruction::Match
     ];
 

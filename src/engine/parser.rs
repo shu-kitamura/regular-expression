@@ -28,8 +28,8 @@ use crate::error::ParseError;
 /// AST の型
 #[derive(Debug, PartialEq)]
 pub enum AST {
+    AnyChar,
     Char(char),
-    Period,
     Plus(Box<AST>),
     Star(Box<AST>),
     Question(Box<AST>),
@@ -44,6 +44,8 @@ enum Qualifier {
     Star,
     Question,
 }
+
+
 
 /// エスケープ文字から AST を生成
 fn parse_escape(pos: usize, c: char) -> Result<AST, ParseError> {
@@ -141,7 +143,7 @@ pub fn parse(pattern: &str) -> Result<AST, ParseError> {
                 seq_or.push(AST::Seq(prev));
             },
             '\\' => is_escape = true,
-            '.' => seq.push(AST::Period),
+            '.' => seq.push(AST::AnyChar),
             _ => seq.push(AST::Char(c))
         };
     }
@@ -155,7 +157,6 @@ pub fn parse(pattern: &str) -> Result<AST, ParseError> {
     }
 
     if let Some(ast) = fold_or(seq_or) {
-        println!("{:?}", ast);
         Ok(ast)
     } else {
         Err(ParseError::Empty)
@@ -227,13 +228,20 @@ fn test_parse_qualifier_question() {
 #[test]
 fn test_fold_or_if_true() {
     // パターン "a|b|c" を想定し、データ準備
-    let seq: Vec<AST> = vec![AST::Char('a'), AST::Char('b'), AST::Char('c')];
+    let seq: Vec<AST> = vec![
+        AST::Char('a'),
+        AST::Char('b'),
+        AST::Char('c')
+    ];
 
     // a|b|c をパースした場合、以下のASTができる
     // AST::Or(AST::Char('a'), AST::Or(AST::Char('b'), AST::Char('c')))
     // 上記のASTを用意するため、データを定義
     let left: AST = AST::Char('a');
-    let right: AST = AST::Or(Box::new(AST::Char('b')), Box::new(AST::Char('c')));
+    let right: AST = AST::Or(
+        Box::new(AST::Char('b')),
+        Box::new(AST::Char('c'))
+    );
     let expect: AST = AST::Or(Box::new(left), Box::new(right));
 
     let actual: AST = fold_or(seq).unwrap();
@@ -288,7 +296,11 @@ fn test_convert_char_to_qualifier_none() {
 #[test]
 fn test_parse_normal_string() {
     // ----- "abc" が入力されたケース -----
-    let expect: AST = AST::Seq(vec![AST::Char('a'), AST::Char('b'), AST::Char('c')]);
+    let expect: AST = AST::Seq(vec![
+        AST::Char('a'),
+        AST::Char('b'),
+        AST::Char('c')
+    ]);
     // テスト対象を実行
     let pattern: &str = "abc";
     let actual: AST = parse(pattern).unwrap();
@@ -312,9 +324,21 @@ fn test_parse_contain_qualifier() {
 #[test]
 fn test_parse_contain_or() {
     // ----- "abc|def|ghi" が入力されたケース-----
-    let abc: AST = AST::Seq(vec![AST::Char('a'), AST::Char('b'), AST::Char('c')]);
-    let def: AST = AST::Seq(vec![AST::Char('d'), AST::Char('e'), AST::Char('f')]);
-    let ghi: AST = AST::Seq(vec![AST::Char('g'), AST::Char('h'), AST::Char('i')]);
+    let abc: AST = AST::Seq(vec![
+        AST::Char('a'),
+        AST::Char('b'),
+        AST::Char('c')
+    ]);
+    let def: AST = AST::Seq(vec![
+        AST::Char('d'),
+        AST::Char('e'),
+        AST::Char('f')
+    ]);
+    let ghi: AST = AST::Seq(vec![
+        AST::Char('g'),
+        AST::Char('h'),
+        AST::Char('i')
+    ]);
 
     let expect: AST = AST::Or(
         Box::new(abc),
@@ -337,8 +361,16 @@ fn test_parse_contain_paran() {
         AST::Char('b'),
         AST::Char('c'),
         AST::Or(
-            Box::new(AST::Seq(vec![AST::Char('d'), AST::Char('e'), AST::Char('f')])),
-            Box::new(AST::Seq(vec![AST::Char('g'), AST::Char('h'), AST::Char('i')]))
+            Box::new(AST::Seq(vec![
+                AST::Char('d'),
+                AST::Char('e'),
+                AST::Char('f')
+            ])),
+            Box::new(AST::Seq(vec![
+                AST::Char('g'),
+                AST::Char('h'),
+                AST::Char('i')
+            ])),
         )
     ]);
     // テスト対象を実行
@@ -353,7 +385,7 @@ fn test_parse_contain_period() {
     // ----- "a.c" が入力されたケース-----
     let expect: AST = AST::Seq(vec![
         AST::Char('a'),
-        AST::Period,
+        AST::AnyChar,
         AST::Char('c'),
     ]);
     // テスト対象を実行
