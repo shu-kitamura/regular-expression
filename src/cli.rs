@@ -39,6 +39,10 @@ pub struct Args {
     #[arg(short = 'H', long = "with-filename")]
     /// 出力する行の前にファイル名を付ける。検索ファイルが2つ以上の場合、こちらがデフォルト
     pub with_filename: bool,
+
+    #[arg(short = 'n', long = "line-number")]
+    /// 入力ファイル内での行番号を表示する
+    pub line_number: bool,
     
     #[arg(long, action = ArgAction::Help)]
     /// help を表示する

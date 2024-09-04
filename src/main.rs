@@ -52,12 +52,13 @@ fn main() {
         // 標準入力を1行ずつ read し、マッチングを実行する
         match match_file(
             &mut buf_reader,
-            "stdin",
+            "(starndard input)",
             &patterns,
             args.ignore_case,
             args.invert_match,
-            false,
-            args.count
+            is_print_filename,
+            args.count,
+            args.line_number
         ) {
             Some(c) => matching_count += c,
             None => {}
@@ -81,7 +82,8 @@ fn main() {
                 args.ignore_case,
                 args.invert_match,
                 is_print_filename,
-                args.count
+                args.count,
+                args.line_number
             ) {
                 Some(c) => matching_count += c,
                 None => {}
@@ -103,10 +105,11 @@ fn match_file(
     ignore_case: bool,
     invert_match: bool,
     is_filename: bool,
-    is_count: bool
+    is_count: bool,
+    is_line_number: bool
 ) -> Option<i32> {
     let mut matching_count: i32 = 0;
-    for result in buf_reader.lines() {
+    for (i, result) in buf_reader.lines().enumerate() {
         let line = match result {
             Ok(line) => line,
             Err(e) => {
@@ -122,7 +125,7 @@ fn match_file(
                     if is_match {
                         matching_count += 1;
                         if !is_count { // -c が指定されたときに、print の処理を飛ばすため。
-                            print(file.to_owned(), line, is_filename);
+                            print(file.to_owned(), line, i+1, is_filename, is_line_number);
                         }
                         // マッチした場合はループを抜ける。
                         // 1つのパターンとマッチした時点で、残りのパターンのマッチはしないため。
@@ -140,13 +143,17 @@ fn match_file(
     Some(matching_count)
 }
 
-/// 行を表示する関数  
-/// ファイル名を表示する・しないで処理が分岐するため、関数を分けた。
-fn print(filename: String, line: String, is_filename: bool) {
-    if is_filename {
-        println!("{filename} : {line}");
-    } else {
-        println!("{line}")
+/// 行を表示する関数
+/// 以下の2点で処理が分岐するため、関数を分けている。
+/// 
+/// * 行数を表示する・しない  
+/// * ファイル名を表示する・しない。
+fn print(filename: String, line: String, line_number: usize, is_filename: bool, is_line_number: bool) {
+    match (is_filename, is_line_number) {
+        (true, true) => println!("{filename}:{line_number}:{line}"),
+        (true, false) => println!("{filename}:{line}"),
+        (false, true) => println!("{line_number}:{line}"),
+        (false, false) => println!("{line}"),
     }
 }
 
@@ -154,7 +161,7 @@ fn print(filename: String, line: String, is_filename: bool) {
 /// ファイル数が 1 の場合、 -H オプションに従う。  
 /// ファイル数が 2 以上の場合、 -h オプションに従う。  
 fn is_print_filename(file_count: usize, no_filename: bool, with_filename: bool) -> bool {
-    if file_count == 1 {
+    if file_count <= 1 {
         with_filename
     } else {
         !no_filename
