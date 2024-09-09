@@ -1,6 +1,6 @@
 //! マッチングを行う関数を定義
 
-pub mod codegen;
+pub mod compiler;
 pub mod evaluator;
 pub mod helper;
 pub mod instruction;
@@ -9,7 +9,7 @@ pub mod parser;
 use crate::{
     error::RegexEngineError,
     engine::{
-        codegen::get_code,
+        compiler::compile,
         evaluator::eval,
         instruction::Instruction,
         parser::{AST, parse},
@@ -88,9 +88,9 @@ pub fn match_line(
     };
 
     // AST から コード(Instructionの配列)を生成する。
-    let code: Vec<Instruction> = match get_code(&ast) {
+    let code: Vec<Instruction> = match compile(&ast) {
         Ok(instructions) => instructions,
-        Err(e) => return Err(RegexEngineError::CodeGenError(e)),
+        Err(e) => return Err(RegexEngineError::CompileError(e)),
     };
 
     let mut is_match: bool = false;

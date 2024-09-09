@@ -42,23 +42,23 @@ impl Display for ParseError {
 impl Error for ParseError {} // デフォルト実装を使うだけの場合、これだけでいい
 
 
-/// コード生成エラーを示す型
+/// コンパイルエラーを示す型
 #[derive(Debug, PartialEq)]
-pub enum CodeGenError {
-    PCOverFlow,   // コード生成中にオーバーフローが起きた場合のエラー
-    FailStar,     // * のコード生成エラー
-    FailQuestion, // ? のコード生成エラー
-    FailOr,       // | のコード生成エラー
+pub enum CompileError {
+    PCOverFlow,   // コンパイルにオーバーフローが起きた場合のエラー
+    FailStar,     // * のコンパイルエラー
+    FailQuestion, // ? のコンパイルエラー
+    FailOr,       // | のコンパイルエラー
 }
 
-/// CodeGenErrorを表示するため、Displayトレイトを実装
-impl Display for CodeGenError {
+/// CompileErrorを表示するため、Displayトレイトを実装
+impl Display for CompileError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "CodeGenError: {:?}", self)
+        write!(f, "CompileError: {:?}", self)
     }
 }
 
-impl Error for CodeGenError {}
+impl Error for CompileError {}
 
 /// コード評価時のエラーを表す型
 #[derive(Debug, PartialEq)]
@@ -78,10 +78,10 @@ impl Display for EvalError {
 impl Error for EvalError {}
 
 
-/// engine.rs で使用する3種類のエラー(Parse, CodeGen, Eval)を扱うための型
+/// engine.rs で使用する3種類のエラー(Parse, Compile, Eval)を扱うための型
 #[derive(Debug, PartialEq)]
 pub enum RegexEngineError {
-    CodeGenError(CodeGenError),
+    CompileError(CompileError),
     EvalError(EvalError),
     ParseError(ParseError),    
 }
@@ -92,7 +92,7 @@ impl Error for RegexEngineError {}
 impl Display for RegexEngineError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            RegexEngineError::CodeGenError(e) => write!(f, "{e}"),
+            RegexEngineError::CompileError(e) => write!(f, "{e}"),
             RegexEngineError::EvalError(e) => write!(f, "{e}"),
             RegexEngineError::ParseError(e) => write!(f, "{e}")
         }

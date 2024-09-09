@@ -1,5 +1,6 @@
-//! AST からコード(Instruction)を生成するための型・関数  
-//! "ab(c|b)" が入力された場合、以下のコードを生成する
+//! AST を命令列(Instruction)にコンパイルするための型・関数  
+//! "ab(c|b)" が入力された場合、以下にコンパイルする
+//! (左の数字はプログラムカウンタ)
 //! 
 //! ```text
 //! 0 : Char(a)
@@ -12,7 +13,7 @@
 //! ```
 
 use crate::{
-    error::CodeGenError,
+    error::CompileError,
     engine::{
         helper::safe_add,
         instruction::{Instruction, Char},
@@ -20,21 +21,21 @@ use crate::{
     }
 };
 
-/// コード生成器の型
+/// コンパイラの型
 #[derive(Default, Debug)]
-struct Generator {
+struct Compiler {
     p_counter: usize,
     instructions: Vec<Instruction>
 }
 
-impl Generator {
+impl Compiler {
     /// p_counter をインクリメントさせる
-    fn increment_p_counter(&mut self) -> Result<(), CodeGenError> {
-        safe_add(&mut self.p_counter, &1, || CodeGenError::PCOverFlow)
+    fn increment_p_counter(&mut self) -> Result<(), CompileError> {
+        safe_add(&mut self.p_counter, &1, || CompileError::PCOverFlow)
     }
 
-    /// 入力された AST の型に応じて、Instruction を生成する関数を実行する
-    fn gen_expr(&mut self, ast: &AST) -> Result<(), CodeGenError> {
+    /// 入力された AST の型に応じた関数を実行する
+    fn gen_expr(&mut self, ast: &AST) -> Result<(), CompileError> {
         match ast {
             AST::AnyChar => self.gen_anychar(),
             AST::Char(c) => self.gen_char(*c),
@@ -79,7 +80,7 @@ impl Generator {
     }
 
     /// AST::Char 型に対応する Instruction を生成し、instructions に push する
-    fn gen_char(&mut self, c: char) -> Result<(), CodeGenError> {
+    fn gen_char(&mut self, c: char) -> Result<(), CompileError> {
         let inst: Instruction = Instruction::Char(Char::Literal(c));
         match self.increment_p_counter() {
             Ok(()) => {
@@ -91,7 +92,7 @@ impl Generator {
     }
 
     /// AST::AnyChar 型に対応する Instruction を生成し、instractions に push する
-    fn gen_anychar(&mut self) -> Result<(), CodeGenError> {
+    fn gen_anychar(&mut self) -> Result<(), CompileError> {
         let inst: Instruction = Instruction::Char(Char::Any);
         match self.increment_p_counter() {
             Ok(()) => {
@@ -111,7 +112,7 @@ impl Generator {
     /// 2 : jump 0 
     /// 3 : ... 続き
     /// ```
-    fn gen_star(&mut self, ast: &AST) -> Result<(), CodeGenError> {
+    fn gen_star(&mut self, ast: &AST) -> Result<(), CompileError> {
         let split_count: usize = self.p_counter;
 
         // カウンタをインクリメントし、split を挿入する
@@ -139,7 +140,7 @@ impl Generator {
             *right = self.p_counter;
             Ok(())
         } else {
-            Err(CodeGenError::FailStar)
+            Err(CompileError::FailStar)
         }
     }
 
@@ -151,7 +152,7 @@ impl Generator {
     /// 1 : split 0, 2
     /// 2 : ... 続き
     /// ```
-    fn gen_plus(&mut self, ast: &AST) -> Result<(), CodeGenError> {
+    fn gen_plus(&mut self, ast: &AST) -> Result<(), CompileError> {
         let left: usize = self.p_counter;
         // AST を再帰的に処理する
         match self.gen_expr(ast) {
@@ -177,7 +178,7 @@ impl Generator {
     /// 1 : Char(a)
     /// 2 : ... 続き
     /// ```
-    fn gen_question(&mut self, ast: &AST) -> Result<(), CodeGenError> {
+    fn gen_question(&mut self, ast: &AST) -> Result<(), CompileError> {
         let split_count: usize = self.p_counter;
         // カウンタをインクリメントし、split を挿入する
         match self.increment_p_counter() {
@@ -198,7 +199,7 @@ impl Generator {
             *right = self.p_counter;
             Ok(())
         } else {
-            Err(CodeGenError::FailQuestion)
+            Err(CompileError::FailQuestion)
         }
     }
 
@@ -212,7 +213,7 @@ impl Generator {
     /// 3 : Char(b)
     /// 4 : ... 続き
     /// ```
-    fn gen_or(&mut self, expr1: &AST, expr2: &AST) -> Result<(), CodeGenError> {
+    fn gen_or(&mut self, expr1: &AST, expr2: &AST) -> Result<(), CompileError> {
         let split_counter: usize = self.p_counter;
         match self.increment_p_counter() {
             Ok(()) => self.instructions.push(
@@ -244,7 +245,7 @@ impl Generator {
         if let Some(Instruction::Split(_, right)) = self.instructions.get_mut(split_counter) {
             *right = self.p_counter;
         } else {
-            return Err(CodeGenError::FailOr);
+            return Err(CompileError::FailOr);
         }
 
         // 2つ目の AST を再帰的に処理する
@@ -258,12 +259,12 @@ impl Generator {
             *arg = self.p_counter;
             Ok(())
         } else {
-            return Err(CodeGenError::FailOr)
+            return Err(CompileError::FailOr)
         }
     }
 
     /// AST::Seq 型に対応する Instruction を生成し、instructions に push する
-    fn gen_seq(&mut self, vec:&Vec<AST>) -> Result<(), CodeGenError> {
+    fn gen_seq(&mut self, vec:&Vec<AST>) -> Result<(), CompileError> {
         for ast in vec {
             match self.gen_expr(ast){
                 Ok(()) => {},
@@ -275,7 +276,7 @@ impl Generator {
 
     /// AST から Instruction を生成し、instructions に push する  
     /// 最後に Match を instructions に push する
-    fn gen_code(&mut self, ast: &AST) -> Result<(), CodeGenError> {
+    fn gen_code(&mut self, ast: &AST) -> Result<(), CompileError> {
         // AST から Instruction を生成し、instructions に挿入する
         match self.gen_expr(ast) {
             Ok(()) => {},
@@ -294,10 +295,10 @@ impl Generator {
 }
 
 /// コード生成を行う関数
-pub fn get_code(ast: &AST) -> Result<Vec<Instruction>, CodeGenError> {
-    let mut generator = Generator::default();
-    match generator.gen_code(ast) {
-        Ok(()) => Ok(generator.instructions),
+pub fn compile(ast: &AST) -> Result<Vec<Instruction>, CompileError> {
+    let mut compiler: Compiler = Compiler::default();
+    match compiler.gen_code(ast) {
+        Ok(()) => Ok(compiler.instructions),
         Err(e) => Err(e)
     }
 }
@@ -307,50 +308,50 @@ pub fn get_code(ast: &AST) -> Result<Vec<Instruction>, CodeGenError> {
 #[test]
 fn test_increment_p_counter_success() {
     let count: usize = 10;
-    let mut generator: Generator = Generator {
+    let mut compiler: Compiler = Compiler {
         p_counter: count,
         instructions : Vec::new()
     };
 
-    generator.increment_p_counter().unwrap();
-    let actual: usize = generator.p_counter;
+    compiler.increment_p_counter().unwrap();
+    let actual: usize = compiler.p_counter;
     assert_eq!(actual, count+1);
 }
 
 #[test]
 fn test_increment_p_counter_failure() {
     let count: usize = 18446744073709551615;
-    let mut generator: Generator = Generator {
+    let mut compiler: Compiler = Compiler {
         p_counter: count,
         instructions : Vec::new()
     };
 
-    let actual = generator.increment_p_counter();
-    assert_eq!(actual, Err(CodeGenError::PCOverFlow));
+    let actual = compiler.increment_p_counter();
+    assert_eq!(actual, Err(CompileError::PCOverFlow));
 }
 
 #[test]
 fn test_gen_char_success() {
     let expect: Vec<Instruction> = vec![Instruction::Char(Char::Literal('a'))];
-    let mut generator: Generator = Generator {
+    let mut compiler: Compiler = Compiler {
         p_counter: 0,
         instructions : Vec::new()
     };
 
-    let _ = generator.gen_char('a');
-    let actual: Vec<Instruction> = generator.instructions;
+    let _ = compiler.gen_char('a');
+    let actual: Vec<Instruction> = compiler.instructions;
     assert_eq!(actual, expect);
 }
 
 #[test]
 fn test_gen_char_failure() {
-    let expect = Err(CodeGenError::PCOverFlow);
-    let mut generator: Generator = Generator {
+    let expect = Err(CompileError::PCOverFlow);
+    let mut compiler: Compiler = Compiler {
         p_counter: 18446744073709551615,
         instructions : Vec::new()
     };
 
-    let actual = generator.gen_char('a');
+    let actual = compiler.gen_char('a');
     assert_eq!(actual, expect);
 }
 
@@ -358,12 +359,12 @@ fn test_gen_char_failure() {
 fn test_gen_anychar() {
     let expect: Vec<Instruction> = vec![Instruction::Char(Char::Any)];
 
-    let mut generator: Generator = Generator {
+    let mut compiler: Compiler = Compiler {
         p_counter: 0,
         instructions : Vec::new()
     };
-    let _ = generator.gen_anychar();
-    assert_eq!(generator.instructions, expect)
+    let _ = compiler.gen_anychar();
+    assert_eq!(compiler.instructions, expect)
 }
 
 #[test]
@@ -375,31 +376,31 @@ fn test_gen_star_success() {
         Instruction::Jump(0),
     ];
 
-    let mut generator: Generator = Generator {
+    let mut compiler: Compiler = Compiler {
         p_counter: 0,
         instructions : Vec::new()
     };
 
     let ast: Box<AST> = Box::new(AST::Char('a'));
 
-    let _ = generator.gen_star(&ast);
-    let actual: Vec<Instruction> = generator.instructions;
+    let _ = compiler.gen_star(&ast);
+    let actual: Vec<Instruction> = compiler.instructions;
     assert_eq!(actual, expect);
 }
 
 #[test]
 fn test_gen_star_failure() {
     // a* が入力されたケース
-    let expect:Result<(), CodeGenError>  = Err(CodeGenError::FailStar);
+    let expect:Result<(), CompileError>  = Err(CompileError::FailStar);
 
-    let mut generator: Generator = Generator {
+    let mut compiler: Compiler = Compiler {
         p_counter: 100,
         instructions : Vec::new()
     };
 
     let ast: Box<AST> = Box::new(AST::Char('a'));
 
-    let actual: Result<(), CodeGenError> = generator.gen_star(&ast);
+    let actual: Result<(), CompileError> = compiler.gen_star(&ast);
     assert_eq!(actual, expect);
 }
 
@@ -412,15 +413,15 @@ fn test_gen_plus_success() {
         Instruction::Split(0, 2),
     ];
 
-    let mut generator: Generator = Generator {
+    let mut compiler: Compiler = Compiler {
         p_counter: 0,
         instructions : Vec::new()
     };
 
     let ast: Box<AST> = Box::new(AST::Char('a'));
 
-    let _ = generator.gen_plus(&ast);
-    let actual: Vec<Instruction> = generator.instructions;
+    let _ = compiler.gen_plus(&ast);
+    let actual: Vec<Instruction> = compiler.instructions;
     assert_eq!(actual, expect);
 }
 
@@ -432,29 +433,29 @@ fn test_gen_question_success() {
         Instruction::Char(Char::Literal('a')),
     ];
 
-    let mut generator: Generator = Generator {
+    let mut compiler: Compiler = Compiler {
         p_counter: 0,
         instructions : Vec::new()
     };
 
     let ast: Box<AST> = Box::new(AST::Char('a'));
 
-    let _ = generator.gen_question(&ast);
-    let actual: Vec<Instruction> = generator.instructions;
+    let _ = compiler.gen_question(&ast);
+    let actual: Vec<Instruction> = compiler.instructions;
     assert_eq!(actual, expect);
 }
 
 #[test]
 fn test_gen_question_failure() {
-    let expect:Result<(), CodeGenError>  = Err(CodeGenError::FailQuestion);
+    let expect:Result<(), CompileError>  = Err(CompileError::FailQuestion);
 
-    let mut generator: Generator = Generator {
+    let mut compiler: Compiler = Compiler {
         p_counter: 100,
         instructions : Vec::new()
     };
     let ast: Box<AST> = Box::new(AST::Char('a'));
 
-    let actual: Result<(), CodeGenError> = generator.gen_question(&ast);
+    let actual: Result<(), CompileError> = compiler.gen_question(&ast);
     assert_eq!(actual, expect);
 }
 
@@ -469,7 +470,7 @@ fn test_gen_or_success() {
         Instruction::Char(Char::Literal('b')),
     ];
 
-    let mut generator: Generator = Generator {
+    let mut compiler: Compiler = Compiler {
         p_counter: 0,
         instructions : Vec::new()
     };
@@ -477,16 +478,16 @@ fn test_gen_or_success() {
     let e1: Box<AST> = Box::new(AST::Seq(vec![AST::Char('a')]));
     let e2: Box<AST> = Box::new(AST::Seq(vec![AST::Char('b')]));
 
-    let _ = generator.gen_or(&e1, &e2);
-    let actual: Vec<Instruction> = generator.instructions;
+    let _ = compiler.gen_or(&e1, &e2);
+    let actual: Vec<Instruction> = compiler.instructions;
     assert_eq!(actual, expect);
 }
 
 #[test]
 fn test_gen_or_failure() {
-    let expect:Result<(), CodeGenError>  = Err(CodeGenError::FailOr);
+    let expect:Result<(), CompileError>  = Err(CompileError::FailOr);
 
-    let mut generator: Generator = Generator {
+    let mut compiler: Compiler = Compiler {
         p_counter: 100,
         instructions : Vec::new()
     };
@@ -494,7 +495,7 @@ fn test_gen_or_failure() {
     let e1: Box<AST> = Box::new(AST::Seq(vec![AST::Char('a')]));
     let e2: Box<AST> = Box::new(AST::Seq(vec![AST::Char('b')]));
 
-    let actual: Result<(), CodeGenError> = generator.gen_or(&e1, &e2);
+    let actual: Result<(), CompileError> = compiler.gen_or(&e1, &e2);
     assert_eq!(actual, expect);
 }
 
@@ -508,13 +509,13 @@ fn test_gen_seq_success() {
 
     let v: Vec<AST> = vec![AST::Char('a'), AST::Char('b'), AST::Char('c')];
 
-    let mut generator: Generator = Generator {
+    let mut compiler: Compiler = Compiler {
         p_counter: 0,
         instructions : Vec::new()
     };
 
-    let _ = generator.gen_seq(&v);
-    let actual: Vec<Instruction> = generator.instructions;
+    let _ = compiler.gen_seq(&v);
+    let actual: Vec<Instruction> = compiler.instructions;
     assert_eq!(actual, expect);
 }
 
@@ -529,7 +530,7 @@ fn test_gen_code_success() {
         Instruction::Match
     ];
 
-    let mut generator: Generator = Generator {
+    let mut compiler: Compiler = Compiler {
         p_counter: 0,
         instructions : Vec::new()
     };
@@ -538,8 +539,8 @@ fn test_gen_code_success() {
     let e2: Box<AST> = Box::new(AST::Seq(vec![AST::Char('b')]));
     let or = AST::Or(e1, e2);
 
-    let _ = generator.gen_code(&or);
-    let actual: Vec<Instruction> = generator.instructions;
+    let _ = compiler.gen_code(&or);
+    let actual: Vec<Instruction> = compiler.instructions;
     assert_eq!(actual, expect);
 }
 
@@ -557,6 +558,6 @@ fn test_get_code_success() {
     let e2: Box<AST> = Box::new(AST::Seq(vec![AST::Char('b')]));
     let or = AST::Or(e1, e2);
 
-    let actual = get_code(&or).unwrap();
+    let actual = compile(&or).unwrap();
     assert_eq!(actual, expect);
 }
