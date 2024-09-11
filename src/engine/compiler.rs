@@ -544,7 +544,7 @@ fn test_gen_code_success() {
 }
 
 #[test]
-fn test_get_code_success() {
+fn test_compile_success() {
     let expect: Vec<Instruction> = vec![
         Instruction::Split(1, 3),
         Instruction::Char(Char::Literal('a')),
