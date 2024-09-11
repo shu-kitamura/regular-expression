@@ -2,7 +2,6 @@
 
 pub mod compiler;
 pub mod evaluator;
-pub mod helper;
 pub mod instruction;
 pub mod parser;
 
@@ -15,6 +14,33 @@ use crate::{
         parser::{AST, parse},
     }
 };
+
+/// オーバーフロー対策のトレイトを定義
+pub trait SafeAdd: Sized {
+    fn safe_add(&self, n: &Self) -> Option<Self>;
+}
+
+/// SafeAdd トレイトを実装
+impl SafeAdd for usize {
+    fn safe_add(&self, n: &Self) -> Option<Self> {
+        self.checked_add(*n)
+    }
+}
+
+pub fn safe_add<T, F, E>(dst :&mut T, src: &T, f: F) -> Result<(), E> 
+where
+    T: SafeAdd,
+    F: Fn() -> E,
+{       
+    {
+        if let Some(n) = dst.safe_add(src) {
+            *dst = n;
+            Ok(())
+        } else {
+            Err(f())
+        }
+    }
+}
 
 /// 文字列のマッチングを実行する。
 fn match_string(insts: &Vec<Instruction>, string: &str, is_end_doller: bool) -> Result<bool, RegexEngineError> {
@@ -331,4 +357,22 @@ fn test_invert_match_result_false() {
 
     let actual: bool = invert_match_result(false, false);
     assert_eq!(actual, false);
+}
+
+#[test]
+fn test_safe_add_success() {
+    use crate::error::CompileError;
+    let mut u: usize = 1;
+    let _ = safe_add(&mut u, &1, || RegexEngineError::CompileError(CompileError::PCOverFlow));
+    assert_eq!(u, 2);
+}
+
+#[test]
+fn test_safe_add_failure() {
+    use crate::error::CompileError;
+
+    let expect = RegexEngineError::CompileError(CompileError::PCOverFlow);
+    let mut u: usize = usize::MAX;
+    let actual: RegexEngineError = safe_add(&mut u, &1, || RegexEngineError::CompileError(CompileError::PCOverFlow)).unwrap_err();
+    assert_eq!(actual, expect);
 }

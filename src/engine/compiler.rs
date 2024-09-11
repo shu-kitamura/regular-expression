@@ -15,7 +15,7 @@
 use crate::{
     error::CompileError,
     engine::{
-        helper::safe_add,
+        safe_add,
         instruction::{Instruction, Char},
         parser::AST,
     }
@@ -320,7 +320,7 @@ fn test_increment_p_counter_success() {
 
 #[test]
 fn test_increment_p_counter_failure() {
-    let count: usize = 18446744073709551615;
+    let count: usize = usize::MAX;
     let mut compiler: Compiler = Compiler {
         p_counter: count,
         instructions : Vec::new()
@@ -347,12 +347,11 @@ fn test_gen_char_success() {
 fn test_gen_char_failure() {
     let expect = Err(CompileError::PCOverFlow);
     let mut compiler: Compiler = Compiler {
-        p_counter: 18446744073709551615,
+        p_counter: usize::MAX,
         instructions : Vec::new()
     };
 
-    let actual = compiler.gen_char('a');
-    assert_eq!(actual, expect);
+    let actual = compiler.gen_char('a');    assert_eq!(actual, expect);
 }
 
 #[test]

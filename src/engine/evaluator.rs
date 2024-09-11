@@ -1,10 +1,12 @@
 //! Instruction と char配列を受け取って評価する
 
+use std::usize;
+
 use crate::{
     error::EvalError,
     engine::{
         instruction::{Instruction, Char},
-        helper::safe_add
+        safe_add
     }
 };
 
@@ -123,13 +125,15 @@ fn test_increment_success() {
 
 #[test]
 fn test_increment_pc_overflow() {
-    let actual = increment_pc_and_index(&mut 18446744073709551615, &mut 1);
+    let mut u = usize::MAX;
+    let actual = increment_pc_and_index(&mut u, &mut 1);
     assert_eq!(actual, Err(EvalError::PCOverFlow));
 }
 
 #[test]
 fn test_increment_charindex_overflow() {
-    let actual = increment_pc_and_index(&mut 1, &mut 18446744073709551615);
+    let mut u = usize::MAX;
+    let actual = increment_pc_and_index(&mut 1, &mut u);
     assert_eq!(actual, Err(EvalError::CharIndexOverFlow));
 }
 
@@ -209,6 +213,6 @@ fn test_eval_depth_invalidpc() {
     let insts: Vec<Instruction> = vec![Instruction::Char(Char::Literal('a')), Instruction::Char(Char::Literal('b')), Instruction::Match];
     let chars:Vec<char> =vec!['a', 'b', 'c', 'd'];
 
-    let actual = eval_depth(&insts, &chars, 18446744073709551615, 0, false);
+    let actual = eval_depth(&insts, &chars, usize::MAX, 0, false);
     assert_eq!(actual, Err(EvalError::InvalidPC));
 }
