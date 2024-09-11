@@ -98,8 +98,8 @@ fn main() {
 }
 
 /// ファイルもしくは、標準入力を1行ずつ read し、マッチングを実行する関数
-fn match_file(
-    buf_reader: &mut dyn BufRead,
+fn match_file<T: BufRead>(
+    buf_reader: T,
     file: &str,
     patterns: &Vec<String>,
     ignore_case: bool,
