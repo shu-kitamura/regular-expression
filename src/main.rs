@@ -52,7 +52,7 @@ fn main() {
         // 標準入力を1行ずつ read し、マッチングを実行する
         match match_file(
             &mut buf_reader,
-            "(starndard input)",
+            "(starndard input)", // grep コマンドでパイプ使用時にファイル名を表示したら、(stardard input)なるのでそれに合わせる。
             &patterns,
             args.ignore_case,
             args.invert_match,
