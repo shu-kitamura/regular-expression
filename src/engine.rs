@@ -60,7 +60,7 @@ fn match_string(insts: &Vec<Instruction>, string: &str, is_end_doller: bool) -> 
 /// * pattern -> 正規表現のパターン
 /// * line -> マッチング対象の文字列
 /// * is_ignore_case -> 大小文字の区別をするかどうか。-c オプションのために使用
-/// * is_invert_match -> 結果を逆にする(マッチ成功時に false、失敗時に true)。-v オプションのために使用
+/// * is_invert_match -> 結果を逆にする(マッチ成功時に false、失敗時に true)
 /// 
 /// # 返り値
 /// 
