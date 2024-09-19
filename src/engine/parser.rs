@@ -28,13 +28,13 @@ use crate::error::ParseError;
 /// AST の型
 #[derive(Debug, PartialEq)]
 pub enum AST {
-    AnyChar,
-    Char(char),
-    Plus(Box<AST>),
-    Star(Box<AST>),
-    Question(Box<AST>),
-    Or(Box<AST>, Box<AST>),
-    Seq(Vec<AST>),
+    AnyChar,                // '.'に対応する型
+    Char(char),             // 通常の文字に対応する型
+    Plus(Box<AST>),         // '+'に対応する型
+    Star(Box<AST>),         // '*'に対応する型
+    Question(Box<AST>),     // '?'に対応する型
+    Or(Box<AST>, Box<AST>), // '|'に対応する型
+    Seq(Vec<AST>),          // 連結に対応する型
 }
 
 /// エスケープ文字から AST を生成
@@ -45,7 +45,7 @@ fn parse_escape(pos: usize, c: char) -> Result<AST, ParseError> {
     }
 }
 
-/// 限量子(+, *, ?)から AST を生成
+/// `+`,`*`,`?`から AST を生成
 fn parse_qualifier(qualifier: char, prev: AST) -> AST{
     match qualifier {
         '+' => AST::Plus(Box::new(prev)),
@@ -55,7 +55,7 @@ fn parse_qualifier(qualifier: char, prev: AST) -> AST{
     }
 }
 
-/// Orを含む式から AST を生成
+/// `|` を含む式から AST を生成
 fn fold_or(mut seq_or: Vec<AST>) -> Option<AST> {
     if seq_or.len() > 1 {
         let mut ast: AST = seq_or.pop().unwrap();
