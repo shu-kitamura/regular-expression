@@ -37,16 +37,6 @@ pub enum AST {
     Seq(Vec<AST>),
 }
 
-/// 限量子(+, *, ?)の型
-#[derive(Debug, PartialEq)]
-enum Qualifier {
-    Plus,
-    Star,
-    Question,
-}
-
-
-
 /// エスケープ文字から AST を生成
 fn parse_escape(pos: usize, c: char) -> Result<AST, ParseError> {
     match c {
@@ -56,21 +46,12 @@ fn parse_escape(pos: usize, c: char) -> Result<AST, ParseError> {
 }
 
 /// 限量子(+, *, ?)から AST を生成
-fn parse_qualifier(qualifier: Qualifier, prev: AST) -> AST{
+fn parse_qualifier(qualifier: char, prev: AST) -> AST{
     match qualifier {
-        Qualifier::Plus => AST::Plus(Box::new(prev)),
-        Qualifier::Star => AST::Star(Box::new(prev)),
-        Qualifier::Question => AST::Question(Box::new(prev)),
-    }
-}
-
-/// char から限量子(Qualifier型)を生成
-fn convert_char_to_qualifier(c: char) -> Option<Qualifier> {
-    match c {
-        '+' => Some(Qualifier::Plus),
-        '*' => Some(Qualifier::Star),
-        '?' => Some(Qualifier::Question),
-        _ => None,
+        '+' => AST::Plus(Box::new(prev)),
+        '*' => AST::Star(Box::new(prev)),
+        '?' => AST::Question(Box::new(prev)),
+        _ => unreachable!()
     }
 }
 
@@ -92,7 +73,7 @@ fn fold_or(mut seq_or: Vec<AST>) -> Option<AST> {
 pub fn parse(pattern: &str) -> Result<AST, ParseError> {
     let mut seq: Vec<AST> = Vec::new();
     let mut seq_or: Vec<AST> = Vec::new();
-    let mut stack: Vec<(Vec<AST>, Vec<AST>)> = Vec::new();  // コンテキストのスタック
+    let mut stack: Vec<(Vec<AST>, Vec<AST>)> = Vec::new();
 
     let mut is_escape: bool = false;
 
@@ -109,9 +90,8 @@ pub fn parse(pattern: &str) -> Result<AST, ParseError> {
         }
         match c {
             '+' | '*' | '?' => {
-                let qualifier: Qualifier = convert_char_to_qualifier(c).unwrap();
                 if let Some(prev_ast) = seq.pop() {
-                    let ast: AST = parse_qualifier(qualifier, prev_ast);
+                    let ast: AST = parse_qualifier(c, prev_ast);
                     seq.push(ast);
                 } else {
                     return Err(ParseError::NoPrev(pos))
@@ -201,7 +181,7 @@ fn test_parse_qualifier_plus() {
 
     // テスト対象を実行
     let ast: AST = AST::Char('a');
-    let actual: AST = parse_qualifier(Qualifier::Plus, ast);
+    let actual: AST = parse_qualifier('+', ast);
     assert_eq!(actual, expect);
 }
 
@@ -211,7 +191,7 @@ fn test_parse_qualifier_star() {
 
     // テスト対象を実行
     let ast: AST = AST::Char('a');
-    let actual: AST = parse_qualifier(Qualifier::Star, ast);
+    let actual: AST = parse_qualifier('*', ast);
     assert_eq!(actual, expect);
 }
 
@@ -221,7 +201,7 @@ fn test_parse_qualifier_question() {
 
     // テスト対象を実行
     let ast: AST = AST::Char('a');
-    let actual: AST = parse_qualifier(Qualifier::Question, ast);
+    let actual: AST = parse_qualifier('?', ast);
     assert_eq!(actual, expect);
 }
 
@@ -261,36 +241,6 @@ fn test_fold_or_if_false() {
     let actual = fold_or(seq).unwrap();
 
     assert_eq!(actual, expect);
-}
-
-#[test]
-fn test_convert_char_to_qualifier_plus() {
-    let expect: Qualifier = Qualifier::Plus;
-    // テスト対象を実行
-    let actual: Qualifier = convert_char_to_qualifier('+').unwrap();
-    assert_eq!(actual, expect);
-}
-
-#[test]
-fn test_convert_char_to_qualifier_star() {
-    let expect: Qualifier = Qualifier::Star;
-    // テスト対象を実行
-    let actual: Qualifier = convert_char_to_qualifier('*').unwrap();
-    assert_eq!(actual, expect);
-}
-
-#[test]
-fn test_convert_char_to_qualifier_question() {
-    let expect: Qualifier = Qualifier::Question;
-    // テスト対象を実行
-    let actual: Qualifier = convert_char_to_qualifier('?').unwrap();
-    assert_eq!(actual, expect);
-}
-
-#[test]
-fn test_convert_char_to_qualifier_none() {
-    let none = convert_char_to_qualifier('c');
-    assert_eq!(none, None);
 }
 
 #[test]
