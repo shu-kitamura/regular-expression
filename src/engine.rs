@@ -95,9 +95,9 @@ pub fn match_line(
         // パターンが $ で終わる場合、$ を取り除く。
         // AST に $ が含まれないようにするための処理。
         pattern = pattern
-                        .get(..pattern.len()-1)
-                        .unwrap()
-                        .to_string();
+                    .get(..pattern.len()-1)
+                    .unwrap()
+                    .to_string();
     }
 
     // -i が指定された場合の処理

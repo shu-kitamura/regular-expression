@@ -88,7 +88,6 @@ fn main() {
                 Some(c) => matching_count += c,
                 None => {}
             };
-
         }
     }
     // -c が true の場合、行数を表示する。
