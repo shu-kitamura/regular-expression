@@ -99,6 +99,24 @@ impl Display for RegexEngineError {
     }
 }
 
+impl From<EvalError> for RegexEngineError {
+    fn from(value: EvalError) -> Self {
+        RegexEngineError::EvalError(value)
+    }
+}
+
+impl From<CompileError> for RegexEngineError {
+    fn from(value: CompileError) -> Self {
+        RegexEngineError::CompileError(value)
+    }
+}
+
+impl From<ParseError> for RegexEngineError {
+    fn from(value: ParseError) -> Self {
+        RegexEngineError::ParseError(value)
+    }
+}
+
 /// コマンドラインの指定に不正があった場合に出力するエラーの型
 #[derive(Debug)]
 pub enum CommandLineError {

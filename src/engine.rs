@@ -45,11 +45,7 @@ where
 /// 文字列のマッチングを実行する。
 fn match_string(insts: &Vec<Instruction>, string: &str, is_end_doller: bool) -> Result<bool, RegexEngineError> {
     let charcters: Vec<char> = string.chars().collect();
-    let match_result: bool = match eval(&insts, &charcters, is_end_doller) {
-        Ok(res) => res,
-        Err(e) => return Err(RegexEngineError::EvalError(e))
-    };
-
+    let match_result: bool = eval(&insts, &charcters, is_end_doller)?;
     Ok(match_result)
 }
 
@@ -108,24 +104,15 @@ pub fn match_line(
     }
 
     // パターンから AST を生成する。
-    let ast: AST = match parse(pattern.as_str()) {
-        Ok(res) => res,
-        Err(e) => return Err(RegexEngineError::ParseError(e)),
-    };
+    let ast: AST = parse(pattern.as_str())?;
 
     // AST から コード(Instructionの配列)を生成する。
-    let code: Vec<Instruction> = match compile(&ast) {
-        Ok(instructions) => instructions,
-        Err(e) => return Err(RegexEngineError::CompileError(e)),
-    };
+    let code: Vec<Instruction> = compile(&ast)?;
 
     let mut is_match: bool = false;
     // パターンの1文字目が ^ の場合、行頭からのマッチのみ実行する
     if is_caret {
-        is_match = match match_string(&code, &line, is_doller) {
-            Ok(res) => res,
-            Err(e) => return Err(e),
-        };
+        is_match = match_string(&code, &line, is_doller)?;
     } else {
         for (i, _) in line.char_indices() {
             // abcdefg という文字列の場合、以下のように順にマッチングする。
@@ -133,10 +120,7 @@ pub fn match_line(
             //     ループ2 : bcdefg
             //     ・・・
             //     ループN : g
-            is_match = match match_string(&code, &line[i..], is_doller) {
-                Ok(res) => res,
-                Err(e) => return Err(e),
-            };
+            is_match = match_string(&code, &line[i..], is_doller)?;
 
             // マッチングが成功した場合、ループを抜ける
             if is_match {
