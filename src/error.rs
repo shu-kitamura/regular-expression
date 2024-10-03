@@ -80,58 +80,39 @@ impl Error for EvalError {}
 
 /// engine.rs で使用する3種類のエラー(Parse, Compile, Eval)を扱うための型
 #[derive(Debug, PartialEq)]
-pub enum RegexEngineError {
+pub enum RegexError {
     CompileError(CompileError),
     EvalError(EvalError),
     ParseError(ParseError),    
 }
 
-impl Error for RegexEngineError {}
+impl Error for RegexError {}
 
-/// RegexEngineErrorを表示するため、Displayトレイトを実装
-impl Display for RegexEngineError {
+/// RegexErrorを表示するため、Displayトレイトを実装
+impl Display for RegexError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            RegexEngineError::CompileError(e) => write!(f, "{e}"),
-            RegexEngineError::EvalError(e) => write!(f, "{e}"),
-            RegexEngineError::ParseError(e) => write!(f, "{e}")
+            RegexError::CompileError(e) => write!(f, "{e}"),
+            RegexError::EvalError(e) => write!(f, "{e}"),
+            RegexError::ParseError(e) => write!(f, "{e}")
         }
     }
 }
 
-impl From<EvalError> for RegexEngineError {
+impl From<EvalError> for RegexError {
     fn from(value: EvalError) -> Self {
-        RegexEngineError::EvalError(value)
+        RegexError::EvalError(value)
     }
 }
 
-impl From<CompileError> for RegexEngineError {
+impl From<CompileError> for RegexError {
     fn from(value: CompileError) -> Self {
-        RegexEngineError::CompileError(value)
+        RegexError::CompileError(value)
     }
 }
 
-impl From<ParseError> for RegexEngineError {
+impl From<ParseError> for RegexError {
     fn from(value: ParseError) -> Self {
-        RegexEngineError::ParseError(value)
+        RegexError::ParseError(value)
     }
 }
-
-/// コマンドラインの指定に不正があった場合に出力するエラーの型
-#[derive(Debug)]
-pub enum CommandLineError {
-    NoPattern,
-    DuplicateFilenameOption,
-}
-
-/// CommandLineErrorを表示するため、Displayトレイトを実装
-impl Display for CommandLineError {
-    fn fmt (&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            CommandLineError::NoPattern => write!(f, "CommandLineError : No pattern specified."),
-            CommandLineError::DuplicateFilenameOption => write!(f, "CommandLineError : -h, -H options are specified at the same time.")
-        }
-    }
-}
-
-impl Error for CommandLineError {}

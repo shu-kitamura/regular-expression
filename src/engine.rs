@@ -1,12 +1,11 @@
 //! マッチングを行う関数を定義
-
 pub mod compiler;
 pub mod evaluator;
 pub mod instruction;
 pub mod parser;
 
 use crate::{
-    error::RegexEngineError,
+    error::RegexError,
     engine::{
         compiler::compile,
         evaluator::eval,
@@ -43,7 +42,7 @@ where
 }
 
 /// 文字列のマッチングを実行する。
-fn match_string(insts: &Vec<Instruction>, string: &str, is_end_doller: bool) -> Result<bool, RegexEngineError> {
+fn match_string(insts: &Vec<Instruction>, string: &str, is_end_doller: bool) -> Result<bool, RegexError> {
     let charcters: Vec<char> = string.chars().collect();
     let match_result: bool = eval(&insts, &charcters, is_end_doller)?;
     Ok(match_result)
@@ -55,22 +54,20 @@ fn match_string(insts: &Vec<Instruction>, string: &str, is_end_doller: bool) -> 
 /// 
 /// * pattern -> 正規表現のパターン
 /// * line -> マッチング対象の文字列
-/// * is_ignore_case -> 大小文字の区別をするかどうか。-c オプションのために使用
-/// * is_invert_match -> 結果を逆にする(マッチ成功時に false、失敗時に true)
+/// * is_ignore_case -> 大小文字の区別をするかどうか
+/// * is_invert_match -> マッチングの結果を逆にする
 /// 
 /// # 返り値
 /// 
-/// エラーなく実行でき、マッチングに成功した場合 Ok(true) を返す。  
-/// エラーなく実行でき、マッチングに失敗した場合 Ok(false) を返す。  
-/// ※ -v オプションが指定されている場合は true/false が反対になる。  
-/// 
-/// エラーが発生した場合 Err を返す。
+/// エラーなく実行でき、マッチングに成功した場合 true を返す。  
+/// エラーなく実行でき、マッチングに失敗した場合 false を返す。  
+/// ※ is_invert_match に true が指定されている場合は マッチング結果が反対になる。  
 pub fn match_line(
     mut pattern: String,
     mut line: String,
     is_ignore_case: bool,
     is_invert_match: bool
-    ) -> Result<bool, RegexEngineError> {
+    ) -> Result<bool, RegexError> {
     // パターンが ^ で始まるかどうか。
     // 始まる場合、行頭からのマッチのみ実行する。始まらない場合、行頭以外のマッチも実行する。
     // どちらか判定するために使う。
@@ -206,7 +203,7 @@ fn test_match_string_eval_error() {
     ];
 
     let actual = match_string(&insts, "abc", false);    
-    assert_eq!(actual, Err(RegexEngineError::EvalError(EvalError::InvalidPC)));
+    assert_eq!(actual, Err(RegexError::EvalError(EvalError::InvalidPC)));
 }
 
 #[test]
@@ -298,7 +295,7 @@ fn test_match_line_parse_error() {
         false,
         false
     );
-    assert_eq!(actual, Err(RegexEngineError::ParseError(ParseError::NoRightParen)));
+    assert_eq!(actual, Err(RegexError::ParseError(ParseError::NoRightParen)));
 }
 
 #[test]
@@ -347,7 +344,7 @@ fn test_invert_match_result_false() {
 fn test_safe_add_success() {
     use crate::error::CompileError;
     let mut u: usize = 1;
-    let _ = safe_add(&mut u, &1, || RegexEngineError::CompileError(CompileError::PCOverFlow));
+    let _ = safe_add(&mut u, &1, || RegexError::CompileError(CompileError::PCOverFlow));
     assert_eq!(u, 2);
 }
 
@@ -355,8 +352,8 @@ fn test_safe_add_success() {
 fn test_safe_add_failure() {
     use crate::error::CompileError;
 
-    let expect = RegexEngineError::CompileError(CompileError::PCOverFlow);
+    let expect = RegexError::CompileError(CompileError::PCOverFlow);
     let mut u: usize = usize::MAX;
-    let actual: RegexEngineError = safe_add(&mut u, &1, || RegexEngineError::CompileError(CompileError::PCOverFlow)).unwrap_err();
+    let actual: RegexError = safe_add(&mut u, &1, || RegexError::CompileError(CompileError::PCOverFlow)).unwrap_err();
     assert_eq!(actual, expect);
 }

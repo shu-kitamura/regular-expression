@@ -1,5 +1,5 @@
 [package]
-name = "regex"
+name = "regular-expression"
 version = "1.2.1"
 edition = "2021"
 
@@ -7,3 +7,7 @@ edition = "2021"
 
 [dependencies]
 clap = { version = "4.5.11", features = ["derive"] }
+
+[[bin]]
+name = "regex"
+path = "src/bin/regex.rs"

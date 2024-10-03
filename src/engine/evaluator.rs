@@ -18,11 +18,7 @@ fn eval_char(inst: &Char, chars: &Vec<char>, index: usize)-> bool {
     };
 
     match chars.get(index) {
-        Some(c) => if c == inst_char {
-            true
-        } else {
-            false
-        }
+        Some(c) => c == inst_char,
         None => false
     }
 }
@@ -58,10 +54,7 @@ fn eval_depth(
         match instruction {
             Instruction::Char(inst_char) => {
                 if eval_char(inst_char, chars, char_index) {
-                    match increment_pc_and_index(&mut p_counter, &mut char_index) {
-                        Ok(()) => {},
-                        Err(e) => return Err(e)
-                    };
+                    increment_pc_and_index(&mut p_counter, &mut char_index)?;
                 } else {
                     return Ok(false)
                 };
@@ -73,9 +66,7 @@ fn eval_depth(
                     return Ok(true)
                 }
             }
-            Instruction::Jump(addr) => {
-                p_counter = *addr;
-            }
+            Instruction::Jump(addr) => p_counter = *addr,
             Instruction::Split(addr1, addr2) => {
                 if chars.len() <= char_index {
                     return Ok(false)

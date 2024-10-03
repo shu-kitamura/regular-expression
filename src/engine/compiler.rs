@@ -82,25 +82,17 @@ impl Compiler {
     /// AST::Char 型に対応する Instruction を生成し、instructions に push する
     fn gen_char(&mut self, c: char) -> Result<(), CompileError> {
         let inst: Instruction = Instruction::Char(Char::Literal(c));
-        match self.increment_p_counter() {
-            Ok(()) => {
-                self.instructions.push(inst);
-                Ok(())
-            },
-            Err(e) => Err(e),
-        }
+        self.increment_p_counter()?;
+        self.instructions.push(inst);
+        Ok(())
     }
 
     /// AST::AnyChar 型に対応する Instruction を生成し、instractions に push する
     fn gen_anychar(&mut self) -> Result<(), CompileError> {
         let inst: Instruction = Instruction::Char(Char::Any);
-        match self.increment_p_counter() {
-            Ok(()) => {
-                self.instructions.push(inst);
-                Ok(())
-            },
-            Err(e) => Err(e),
-        }
+        self.increment_p_counter()?;
+        self.instructions.push(inst);
+        Ok(())
     }
 
     /// AST::Star 型に対応する Instruction を生成し、instructions に push する  
@@ -113,29 +105,22 @@ impl Compiler {
     /// 3 : ... 続き
     /// ```
     fn gen_star(&mut self, ast: &AST) -> Result<(), CompileError> {
+        // 後で使うので、現在のポインタを変数に格納する
         let split_count: usize = self.p_counter;
 
-        // カウンタをインクリメントし、split を挿入する
-        match self.increment_p_counter() {
-            // 第二引数は、後に出てくる Jump のカウンタの数値を示すものであり、この時点では決まらないので仮の数値(ここでは 0 )を入れる
-            // 仮の数値は、Jump を挿入した後に更新する
-            Ok(()) => self.instructions.push(Instruction::Split(self.p_counter, 0)),
-            Err(e) => return Err(e),
-        };
+        self.increment_p_counter()?;
+        // split を挿入する。第二引数には expr2 のコードの開始のカウンタを指定する必要があるが、
+        // この時点ではまだ値がわからないので、ここでは仮の数値(0)を入れて、数値は後で更新する。
+        self.instructions.push(Instruction::Split(self.p_counter, 0));
 
         // AST を再帰的に処理する
-        match self.gen_expr(ast) {
-            Ok(()) => {},
-            Err(e) => return Err(e),
-        };
+        self.gen_expr(ast)?;
 
         // カウンタをインクリメントし、Jump を挿入する
-        match self.increment_p_counter() {
-            Ok(()) => self.instructions.push(Instruction::Jump(split_count)),
-            Err(e) => return Err(e),
-        }
-
-        // 仮の数値としていた Split の第二引数を更新する
+        self.increment_p_counter()?;
+        self.instructions.push(Instruction::Jump(split_count));
+        
+        // Split の第二引数を更新する
         if let Some(Instruction::Split(_, right)) = self.instructions.get_mut(split_count) {
             *right = self.p_counter;
             Ok(())
@@ -155,19 +140,12 @@ impl Compiler {
     fn gen_plus(&mut self, ast: &AST) -> Result<(), CompileError> {
         let left: usize = self.p_counter;
         // AST を再帰的に処理する
-        match self.gen_expr(ast) {
-            Ok(()) => {},
-            Err(e) => return Err(e),
-        };
+        self.gen_expr(ast)?;
 
         // カウンタをインクリメントし Split を挿入する
-        match self.increment_p_counter() {
-            Ok(()) => {
-                self.instructions.push(Instruction::Split(left, self.p_counter));
-                Ok(())
-            },
-            Err(e) => return Err(e),
-        }
+        self.increment_p_counter()?;
+        self.instructions.push(Instruction::Split(left, self.p_counter));
+        Ok(())
     }
 
     /// AST::Question 型に対応する Instruction を生成し、instructions に push する  
@@ -179,22 +157,19 @@ impl Compiler {
     /// 2 : ... 続き
     /// ```
     fn gen_question(&mut self, ast: &AST) -> Result<(), CompileError> {
+        // 後で使うので、現在のポインタを変数に格納する。
         let split_count: usize = self.p_counter;
-        // カウンタをインクリメントし、split を挿入する
-        match self.increment_p_counter() {
-            // 第二引数は、この時点では決まらないので仮の数値(ここでは 0 )を入れる
-            // 仮の数値は、後に更新する
-            Ok(()) => self.instructions.push(Instruction::Split(self.p_counter, 0)),
-            Err(e) => return Err(e),
-        };
 
-        // AST を再帰的に処理する
-        match self.gen_expr(ast) {
-            Ok(()) => {},
-            Err(e) => return Err(e),
-        };
+        self.increment_p_counter()?;
 
-        // 仮の数値としていた Split の第二引数を更新する
+        // split を挿入する。第二引数には expr2 のコードの開始のカウンタを指定する必要があるが、
+        // この時点ではまだ値がわからないので、ここでは仮の数値(0)を入れて、数値は後で更新する。
+        self.instructions.push(Instruction::Split(self.p_counter, 0));
+        
+        // AST を再帰的に処理する。
+        self.gen_expr(ast)?;
+
+        // Split の第二引数を更新する。
         if let Some(Instruction::Split(_, right)) = self.instructions.get_mut(split_count) {
             *right = self.p_counter;
             Ok(())
@@ -214,47 +189,37 @@ impl Compiler {
     /// 4 : ... 続き
     /// ```
     fn gen_or(&mut self, expr1: &AST, expr2: &AST) -> Result<(), CompileError> {
+        // 後で使うので、現在のポインタを変数に格納する。
         let split_counter: usize = self.p_counter;
-        match self.increment_p_counter() {
-            Ok(()) => self.instructions.push(
-                // 第二引数は、expr2のコードの開始のカウンタを指定するため、この時点では決まらない
-                // ここでは仮の数値(0)を入れて。数値は後で更新する
-                Instruction::Split(self.p_counter, 0)
-            ),
-            Err(e) => return Err(e),
-        };
 
-        // 1つ目の AST を再帰的に処理する
-        match self.gen_expr(expr1) {
-            Ok(()) => {},
-            Err(e) => return Err(e),
-        };
+        self.increment_p_counter()?;
+
+        // split を挿入する。第二引数には expr2 のコードの開始のカウンタを指定する必要があるが、
+        // この時点ではまだ値がわからないので、ここでは仮の数値(0)を入れて、数値は後で更新する。
+        self.instructions.push(Instruction::Split(self.p_counter, 0));
+
+        // 1つ目の AST を再帰的に処理する。
+        self.gen_expr(expr1)?;
 
         let jump_counter: usize = self.p_counter;
 
-        match self.increment_p_counter() {
-            Ok(()) => self.instructions.push(
-                // 引数は、expr2 のコードの次のカウンタを指定するため、この時点では決まらない
-                // ここでは仮の数値(0)を入れて。数値は後で更新する
-                Instruction::Jump(0)
-            ),
-            Err(e) => return Err(e),
-        };
+        self.increment_p_counter()?;
 
-        // Splitの第二引数を更新する
+        // Jump を挿入する。引数には expr2 のコードの次のカウンタを指定する必要があるが、
+        // この時点ではまだ値がわからないので、ここでは仮の数値(0)を入れて、数値は後で更新する。
+        self.instructions.push(Instruction::Jump(0));
+
+        // Splitの第二引数を更新する。
         if let Some(Instruction::Split(_, right)) = self.instructions.get_mut(split_counter) {
             *right = self.p_counter;
         } else {
             return Err(CompileError::FailOr);
         }
 
-        // 2つ目の AST を再帰的に処理する
-        match self.gen_expr(expr2) {
-            Ok(()) => {},
-            Err(e) => return Err(e),
-        };
+        // 2つ目の AST を再帰的に処理する。
+        self.gen_expr(expr2)?;
 
-        // Jumpの引数を更新する
+        // Jump の引数を更新する。
         if let Some(Instruction::Jump(arg)) = self.instructions.get_mut(jump_counter) {
             *arg = self.p_counter;
             Ok(())
@@ -266,10 +231,7 @@ impl Compiler {
     /// AST::Seq 型に対応する Instruction を生成し、instructions に push する
     fn gen_seq(&mut self, vec:&Vec<AST>) -> Result<(), CompileError> {
         for ast in vec {
-            match self.gen_expr(ast){
-                Ok(()) => {},
-                Err(e) => return Err(e),
-            };
+            self.gen_expr(ast)?;
         }
         Ok(())
     }
@@ -278,29 +240,20 @@ impl Compiler {
     /// 最後に Match を instructions に push する
     fn gen_code(&mut self, ast: &AST) -> Result<(), CompileError> {
         // AST から Instruction を生成し、instructions に挿入する
-        match self.gen_expr(ast) {
-            Ok(()) => {},
-            Err(e) => return Err(e),
-        };
+        self.gen_expr(ast)?;
 
         // Match を instructions に挿入する
-        match self.increment_p_counter() {
-            Ok(()) => {
-                self.instructions.push(Instruction::Match);
-                Ok(())
-            }
-            Err(e) => Err(e)
-        }
+        self.increment_p_counter()?;
+        self.instructions.push(Instruction::Match);
+        Ok(())
     }
 }
 
 /// コード生成を行う関数
 pub fn compile(ast: &AST) -> Result<Vec<Instruction>, CompileError> {
     let mut compiler: Compiler = Compiler::default();
-    match compiler.gen_code(ast) {
-        Ok(()) => Ok(compiler.instructions),
-        Err(e) => Err(e)
-    }
+    compiler.gen_code(ast)?;
+    Ok(compiler.instructions)
 }
 
 // ----- テストコード -----
