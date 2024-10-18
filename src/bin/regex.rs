@@ -247,18 +247,24 @@ fn is_print_filename(file_count: usize, no_filename: bool, with_filename: bool) 
 }
 
 // ----- テストコード -----
-#[test]
-fn test_is_print_filename() {
-    // ファイル数が 1 で、オプションなし
-    assert_eq!(is_print_filename(1, false, false), false);
-    // ファイル数が 1 で、-h オプションあり
-    assert_eq!(is_print_filename(1, true, false), false);
-    // ファイル数が 1 で、-H オプションあり
-    assert_eq!(is_print_filename(1, false, true), true);
-    // ファイル数が 2(≒ 2以上) で、オプションなし
-    assert_eq!(is_print_filename(2, false, false), true);
-    // ファイル数が 2(≒ 2以上) で、-h オプションあり
-    assert_eq!(is_print_filename(2, true, false), false);
-    // ファイル数が 2(≒ 2以上) で、-H オプションあり
-    assert_eq!(is_print_filename(2, false, true), true);
+
+#[cfg(test)]
+mod tests {
+    use crate::is_print_filename;
+    
+    #[test]
+    fn test_is_print_filename() {
+        // ファイル数が 1 で、オプションなし
+        assert_eq!(is_print_filename(1, false, false), false);
+        // ファイル数が 1 で、-h オプションあり
+        assert_eq!(is_print_filename(1, true, false), false);
+        // ファイル数が 1 で、-H オプションあり
+        assert_eq!(is_print_filename(1, false, true), true);
+        // ファイル数が 2(≒ 2以上) で、オプションなし
+        assert_eq!(is_print_filename(2, false, false), true);
+        // ファイル数が 2(≒ 2以上) で、-h オプションあり
+        assert_eq!(is_print_filename(2, true, false), false);
+        // ファイル数が 2(≒ 2以上) で、-H オプションあり
+        assert_eq!(is_print_filename(2, false, true), true);
+    }
 }

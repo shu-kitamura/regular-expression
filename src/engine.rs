@@ -158,202 +158,209 @@ fn invert_match_result(match_result: bool, is_invert: bool) -> bool {
     }
 }
 
-#[test]
-fn test_match_string_true() {
-    let insts: Vec<Instruction> = vec![
-        Instruction::Char(instruction::Char::Literal('a')),
-        Instruction::Char(instruction::Char::Literal('b')),
-        Instruction::Split(3, 5),
-        Instruction::Char(instruction::Char::Literal('c')),
-        Instruction::Jump(6),
-        Instruction::Char(instruction::Char::Literal('d')),
-        Instruction::Match
-    ];
-    let actual: bool = match_string(&insts, "abc", false).unwrap();
-    assert_eq!(actual, true);
-}
+#[cfg(test)]
+mod tests {
+    use crate::{
+        engine::{
+            instruction::{Instruction, Char},
+            match_string, match_line, invert_match_result, is_beginning_caret, is_end_doller, safe_add
+        },
+        error::{RegexError, EvalError, ParseError}
+    };
 
-#[test]
-fn test_match_string_false() {
-    let insts: Vec<Instruction> = vec![
-        Instruction::Char(instruction::Char::Literal('a')),
-        Instruction::Char(instruction::Char::Literal('b')),
-        Instruction::Split(3, 5),
-        Instruction::Char(instruction::Char::Literal('c')),
-        Instruction::Jump(6),
-        Instruction::Char(instruction::Char::Literal('d')),
-        Instruction::Match
-    ];
-    let actual: bool = match_string(&insts, "abx", false).unwrap();
-    assert_eq!(actual, false);
-}
+    #[test]
+    fn test_match_string_true() {
+        let insts: Vec<Instruction> = vec![
+            Instruction::Char(Char::Literal('a')),
+            Instruction::Char(Char::Literal('b')),
+            Instruction::Split(3, 5),
+            Instruction::Char(Char::Literal('c')),
+            Instruction::Jump(6),
+            Instruction::Char(Char::Literal('d')),
+            Instruction::Match
+        ];
+        let actual: bool = match_string(&insts, "abc", false).unwrap();
+        assert_eq!(actual, true);
+    }
 
-#[test]
-fn test_match_string_eval_error() {
-    use super::error::EvalError;
+    #[test]
+    fn test_match_string_false() {
+        let insts: Vec<Instruction> = vec![
+            Instruction::Char(Char::Literal('a')),
+            Instruction::Char(Char::Literal('b')),
+            Instruction::Split(3, 5),
+            Instruction::Char(Char::Literal('c')),
+            Instruction::Jump(6),
+            Instruction::Char(Char::Literal('d')),
+            Instruction::Match
+        ];
+        let actual: bool = match_string(&insts, "abx", false).unwrap();
+        assert_eq!(actual, false);
+    }
 
-    let insts: Vec<Instruction> = vec![
-        Instruction::Char(instruction::Char::Literal('a')),
-        Instruction::Char(instruction::Char::Literal('b')),
-        Instruction::Split(100, 200),
-        Instruction::Char(instruction::Char::Literal('c')),
-        Instruction::Jump(6),
-        Instruction::Char(instruction::Char::Literal('d')),
-        Instruction::Match
-    ];
+    #[test]
+    fn test_match_string_eval_error() {
+        let insts: Vec<Instruction> = vec![
+            Instruction::Char(Char::Literal('a')),
+            Instruction::Char(Char::Literal('b')),
+            Instruction::Split(100, 200),
+            Instruction::Char(Char::Literal('c')),
+            Instruction::Jump(6),
+            Instruction::Char(Char::Literal('d')),
+            Instruction::Match
+        ];
 
-    let actual = match_string(&insts, "abc", false);    
-    assert_eq!(actual, Err(RegexError::EvalError(EvalError::InvalidPC)));
-}
+        let actual = match_string(&insts, "abc", false);    
+        assert_eq!(actual, Err(RegexError::EvalError(EvalError::InvalidPC)));
+    }
 
-#[test]
-fn test_match_line_true() {
-    let actual: bool = match_line(
-        "ab*(c|d)".to_string(),
-        "xorabbbbd".to_string(),
-        false,
-        false
-    ).unwrap();
-    assert_eq!(actual, true);
-}
+    #[test]
+    fn test_match_line_true() {
+        let actual: bool = match_line(
+            "ab*(c|d)".to_string(),
+            "xorabbbbd".to_string(),
+            false,
+            false
+        ).unwrap();
+        assert_eq!(actual, true);
+    }
 
-#[test]
-fn test_match_line_false() {
-    let actual: bool = match_line(
-        "Ab*(c|d)".to_string(),
-        "abbbbxccd".to_string(),
-        true,
-        false,
-    ).unwrap();
-    assert_eq!(actual, false);
-}
+    #[test]
+    fn test_match_line_false() {
+        let actual: bool = match_line(
+            "Ab*(c|d)".to_string(),
+            "abbbbxccd".to_string(),
+            true,
+            false,
+        ).unwrap();
+        assert_eq!(actual, false);
+    }
 
-#[test]
-fn test_match_invert() {
-    let actual: bool = match_line(
-        "Ab*(c|d)".to_string(),
-        "abbbbxccd".to_string(),
-        true,
-        true,
-    ).unwrap();
-    assert_eq!(actual, true);
-}
+    #[test]
+    fn test_match_invert() {
+        let actual: bool = match_line(
+            "Ab*(c|d)".to_string(),
+            "abbbbxccd".to_string(),
+            true,
+            true,
+        ).unwrap();
+        assert_eq!(actual, true);
+    }
 
-#[test]
-fn test_match_line_biginning_caret() {
-    // a で始まり、bの0回以上の繰り返し、 c があるので、マッチすることを期待。
-    // (true を期待するケース)
-    let actual1: bool = match_line(
-        "^ab*(c|d)".to_string(),
-        "abbbbccd".to_string(),
-        false,
-        false,
-    ).unwrap();
-    assert_eq!(actual1, true);
+    #[test]
+    fn test_match_line_biginning_caret() {
+        // a で始まり、bの0回以上の繰り返し、 c があるので、マッチすることを期待。
+        // (true を期待するケース)
+        let actual1: bool = match_line(
+            "^ab*(c|d)".to_string(),
+            "abbbbccd".to_string(),
+            false,
+            false,
+        ).unwrap();
+        assert_eq!(actual1, true);
 
-    // a で始まっていないので、マッチしないことを期待。
-    // (false を期待するケース)
-    let actual2: bool = match_line(
-        "^b*(c|d)".to_string(),
-        "abbbbccd".to_string(),
-        false,
-        false,
-    ).unwrap();
-    assert_eq!(actual2, false);
-}
+        // a で始まっていないので、マッチしないことを期待。
+        // (false を期待するケース)
+        let actual2: bool = match_line(
+            "^b*(c|d)".to_string(),
+            "abbbbccd".to_string(),
+            false,
+            false,
+        ).unwrap();
+        assert_eq!(actual2, false);
+    }
 
-#[test]
-fn test_match_line_is_end_doller() {
-    // パターンと一致する部分(abd)が行末なので、マッチすることを期待。
-    // (true を期待するケース)
-    let actual1: bool = match_line(
-        "ab(c|d)$".to_string(),
-        "asdfabd".to_string(),
-        false,
-        false,
-    ).unwrap();
-    assert_eq!(actual1, true);
+    #[test]
+    fn test_match_line_is_end_doller() {
+        // パターンと一致する部分(abd)が行末なので、マッチすることを期待。
+        // (true を期待するケース)
+        let actual1: bool = match_line(
+            "ab(c|d)$".to_string(),
+            "asdfabd".to_string(),
+            false,
+            false,
+        ).unwrap();
+        assert_eq!(actual1, true);
 
-    // パターンと一致する部分(abc)が行末ではないので、マッチしないことを期待。
-    // (false を期待するケース)
-    let actual2: bool = match_line(
-        "ab(c|d)$".to_string(),
-        "asdfabdxxx".to_string(),
-        false,
-        false,
-    ).unwrap();
-    assert_eq!(actual2, false);
-}
+        // パターンと一致する部分(abc)が行末ではないので、マッチしないことを期待。
+        // (false を期待するケース)
+        let actual2: bool = match_line(
+            "ab(c|d)$".to_string(),
+            "asdfabdxxx".to_string(),
+            false,
+            false,
+        ).unwrap();
+        assert_eq!(actual2, false);
+    }
 
-#[test]
-fn test_match_line_parse_error() {
-    use super::error::ParseError;
+    #[test]
+    fn test_match_line_parse_error() {
+        let actual = match_line(
+            "ab(c|d".to_string(),
+            "a".to_string(),
+            false,
+            false
+        );
+        assert_eq!(actual, Err(RegexError::ParseError(ParseError::NoRightParen)));
+    }
 
-    let actual = match_line(
-        "ab(c|d".to_string(),
-        "a".to_string(),
-        false,
-        false
-    );
-    assert_eq!(actual, Err(RegexError::ParseError(ParseError::NoRightParen)));
-}
+    #[test]
+    fn test_is_beginning_caret_true() {
+        let actual: bool = is_beginning_caret("^pattern");
+        assert_eq!(actual, true);
+    }
 
-#[test]
-fn test_is_beginning_caret_true() {
-    let actual: bool = is_beginning_caret("^pattern");
-    assert_eq!(actual, true);
-}
+    #[test]
+    fn test_is_beginning_caret_false() {
+        let actual: bool = is_beginning_caret("pattern");
+        assert_eq!(actual, false);
+    }
 
-#[test]
-fn test_is_beginning_caret_false() {
-    let actual: bool = is_beginning_caret("pattern");
-    assert_eq!(actual, false);
-}
+    #[test]
+    fn test_is_end_doller_true() {
+        let actual: bool = is_end_doller("pattern$");
+        assert_eq!(actual, true);
+    }
 
-#[test]
-fn test_is_end_doller_true() {
-    let actual: bool = is_end_doller("pattern$");
-    assert_eq!(actual, true);
-}
+    #[test]
+    fn test_is_end_doller_false() {
+        let actual: bool = is_end_doller("pattern");
+        assert_eq!(actual, false);
+    }
 
-#[test]
-fn test_is_end_doller_false() {
-    let actual: bool = is_end_doller("pattern");
-    assert_eq!(actual, false);
-}
+    #[test]
+    fn test_invert_match_result_true() {
+        let actual: bool = invert_match_result(true, false);
+        assert_eq!(actual, true);
 
-#[test]
-fn test_invert_match_result_true() {
-    let actual: bool = invert_match_result(true, false);
-    assert_eq!(actual, true);
+        let actual: bool = invert_match_result(false, true);
+        assert_eq!(actual, true);
+    }
 
-    let actual: bool = invert_match_result(false, true);
-    assert_eq!(actual, true);
-}
+    #[test]
+    fn test_invert_match_result_false() {
+        let actual: bool = invert_match_result(true, true);
+        assert_eq!(actual, false);
 
-#[test]
-fn test_invert_match_result_false() {
-    let actual: bool = invert_match_result(true, true);
-    assert_eq!(actual, false);
+        let actual: bool = invert_match_result(false, false);
+        assert_eq!(actual, false);
+    }
 
-    let actual: bool = invert_match_result(false, false);
-    assert_eq!(actual, false);
-}
+    #[test]
+    fn test_safe_add_success() {
+        use crate::error::CompileError;
+        let mut u: usize = 1;
+        let _ = safe_add(&mut u, &1, || RegexError::CompileError(CompileError::PCOverFlow));
+        assert_eq!(u, 2);
+    }
 
-#[test]
-fn test_safe_add_success() {
-    use crate::error::CompileError;
-    let mut u: usize = 1;
-    let _ = safe_add(&mut u, &1, || RegexError::CompileError(CompileError::PCOverFlow));
-    assert_eq!(u, 2);
-}
+    #[test]
+    fn test_safe_add_failure() {
+        use crate::error::CompileError;
 
-#[test]
-fn test_safe_add_failure() {
-    use crate::error::CompileError;
-
-    let expect = RegexError::CompileError(CompileError::PCOverFlow);
-    let mut u: usize = usize::MAX;
-    let actual: RegexError = safe_add(&mut u, &1, || RegexError::CompileError(CompileError::PCOverFlow)).unwrap_err();
-    assert_eq!(actual, expect);
+        let expect = RegexError::CompileError(CompileError::PCOverFlow);
+        let mut u: usize = usize::MAX;
+        let actual: RegexError = safe_add(&mut u, &1, || RegexError::CompileError(CompileError::PCOverFlow)).unwrap_err();
+        assert_eq!(actual, expect);
+    }
 }
