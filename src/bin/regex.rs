@@ -203,7 +203,7 @@ fn match_file<T: BufRead>(
                     if is_match {
                         matching_count += 1;
                         if !is_count { // -c が指定されたときに、print の処理を飛ばすため。
-                            print(file.to_owned(), line, i+1, is_filename, is_line_number);
+                            print(file, &line, i+1, is_filename, is_line_number);
                         }
                         // マッチした場合はループを抜ける。
                         // 1つのパターンとマッチした時点で、残りのパターンのマッチはしないため。
@@ -226,7 +226,7 @@ fn match_file<T: BufRead>(
 /// 
 /// * 行数を表示する・しない  
 /// * ファイル名を表示する・しない。
-fn print(filename: String, line: String, line_number: usize, is_filename: bool, is_line_number: bool) {
+fn print(filename: &str, line: &str, line_number: usize, is_filename: bool, is_line_number: bool) {
     match (is_filename, is_line_number) {
         (true, true) => println!("{filename}:{line_number}:{line}"),
         (true, false) => println!("{filename}:{line}"),
@@ -251,7 +251,7 @@ fn is_print_filename(file_count: usize, no_filename: bool, with_filename: bool) 
 #[cfg(test)]
 mod tests {
     use crate::is_print_filename;
-    
+
     #[test]
     fn test_is_print_filename() {
         // ファイル数が 1 で、オプションなし
