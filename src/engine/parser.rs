@@ -96,30 +96,32 @@ pub fn parse(pattern: &str) -> Result<AST, ParseError> {
                 } else {
                     return Err(ParseError::NoPrev(pos))
                 }
-            },
+            }
             '(' => {
                 let prev: Vec<AST> = take(&mut seq);
                 let prev_or: Vec<AST> = take(&mut seq_or);
                 stack.push((prev, prev_or));
-            },
-            ')' => if let Some((mut prev, prev_or)) = stack.pop() {
-                        if !seq.is_empty() {
-                            seq_or.push(AST::Seq(seq));
-                        }
-
-                        if let Some(ast) = fold_or(seq_or) {
-                            prev.push(ast);
-                        }
-
-                        seq = prev;
-                        seq_or = prev_or;
-                    } else {
-                        return Err(ParseError::InvalidRightParen(pos));
+            }
+            ')' => {
+                if let Some((mut prev, prev_or)) = stack.pop() {
+                    if !seq.is_empty() {
+                        seq_or.push(AST::Seq(seq));
                     }
+
+                    if let Some(ast) = fold_or(seq_or) {
+                        prev.push(ast);
+                    }
+
+                    seq = prev;
+                    seq_or = prev_or;
+                } else {
+                    return Err(ParseError::InvalidRightParen(pos));
+                }
+            }
             '|' => {
                 let prev: Vec<AST> = take(&mut seq);
                 seq_or.push(AST::Seq(prev));
-            },
+            }
             '\\' => is_escape = true,
             '.' => seq.push(AST::AnyChar),
             _ => seq.push(AST::Char(c))
