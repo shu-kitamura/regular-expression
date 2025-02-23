@@ -51,14 +51,27 @@ fn parse_qualifier(qualifier: char, prev: AST) -> AST{
         '+' => AST::Plus(Box::new(prev)),
         '*' => AST::Star(Box::new(prev)),
         '?' => AST::Question(Box::new(prev)),
-        _ => unreachable!()
+        _ => unreachable!() // 呼び出し方から、到達しないことが確定している
     }
 }
 
 /// `|` を含む式から AST を生成
+/// 
+/// 入力されたASTが [AST1, AST2, AST3] の場合、以下の AST を生成する
+/// ```text
+/// AST::Or(
+///     AST1,
+///     AST::Or(
+///         AST2,
+///         AST3
+///     )
+/// ) 
+/// ```
+/// 
 fn fold_or(mut seq_or: Vec<AST>) -> Option<AST> {
     if seq_or.len() > 1 {
         let mut ast: AST = seq_or.pop().unwrap();
+        // AST を逆順で結合するため、reverse メソッドを呼び出す
         seq_or.reverse();
         for s in seq_or {
             ast = AST::Or(Box::new(s), Box::new(ast));
@@ -74,7 +87,6 @@ pub fn parse(pattern: &str) -> Result<AST, ParseError> {
     let mut seq: Vec<AST> = Vec::new();
     let mut seq_or: Vec<AST> = Vec::new();
     let mut stack: Vec<(Vec<AST>, Vec<AST>)> = Vec::new();
-
     let mut is_escape: bool = false;
 
     for (pos, c) in pattern.chars().enumerate() {
@@ -132,10 +144,12 @@ pub fn parse(pattern: &str) -> Result<AST, ParseError> {
         return Err(ParseError::NoRightParen)
     }
 
+    // seq が残っている場合、seq_or に追加
     if !seq.is_empty() {
         seq_or.push(AST::Seq(seq));
     }
 
+    // 最後に seq_or を fold して、AST を生成
     if let Some(ast) = fold_or(seq_or) {
         Ok(ast)
     } else {
