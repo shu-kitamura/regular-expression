@@ -103,7 +103,7 @@ fn main() {
     // -h, -H が同時に指定されている場合、エラーを表示して return する
     if args.with_filename && args.no_filename {
         eprintln!("{}", CommandLineError::DuplicateFilenameOption);
-        return
+        std::process::exit(1);
     }
 
     // 引数・オプションに指定したパターンを取得
@@ -111,7 +111,7 @@ fn main() {
         Ok(pattern_list) => pattern_list.clone(),
         Err(e) => {
             eprintln!("{e}");
-            return
+            std::process::exit(1);
         },
     };
 
