@@ -100,7 +100,7 @@ impl Error for CommandLineError {}
 fn main() {
     let mut args: Args = Args::parse();
 
-    // -h, -H が同時に指定されている場合、エラーを表示して return する
+    // -h, -H が同時に指定されている場合、エラーを表示してプログラムを終了する（終了コード 1）
     if args.with_filename && args.no_filename {
         eprintln!("{}", CommandLineError::DuplicateFilenameOption);
         std::process::exit(1);
