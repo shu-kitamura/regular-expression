@@ -34,13 +34,22 @@ impl Compiler {
         safe_add(&mut self.p_counter, &1, || CompileError::PCOverFlow)
     }
 
-    /// ヘルパー関数: 指定されたインデックスの Split 命令の右側アドレスを現在のプログラムカウンタに更新する。
-    fn update_split_right_counter(&mut self, index: usize, err: CompileError) -> Result<(), CompileError> {
-        if let Some(Instruction::Split(_, right)) = self.instructions.get_mut(index) {
-            *right = self.p_counter;
-            Ok(())
-        } else {
-            Err(err)  // 例えば、FailStar や FailQuestion、FailOr などのエラーを返す
+    /// ヘルパー関数: 指定されたインデックスの命令が Split または Jump 命令であれば、
+    /// そのアドレスを現在のプログラムカウンタに更新する。
+    ///
+    /// - Split 命令の場合、右側アドレス (second argument) を更新する。
+    /// - Jump 命令の場合、ジャンプ先アドレスを更新する。
+    fn update_instruction_address(&mut self, index: usize, err: CompileError) -> Result<(), CompileError> {
+        match self.instructions.get_mut(index) {
+            Some(Instruction::Split(_, right)) => {
+                *right = self.p_counter;
+                Ok(())
+            },
+            Some(Instruction::Jump(addr)) => {
+                *addr = self.p_counter;
+                Ok(())
+            },
+            _ => Err(err)
         }
     }
 
@@ -131,7 +140,7 @@ impl Compiler {
         self.instructions.push(Instruction::Jump(split_count));
         
         // Split の第二引数を更新する
-        self.update_split_right_counter(split_count, CompileError::FailStar)
+        self.update_instruction_address(split_count, CompileError::FailStar)
     }
 
     /// AST::Plus 型に対応する Instruction を生成し、instructions に push する  
@@ -175,7 +184,8 @@ impl Compiler {
         self.gen_expr(ast)?;
 
         // Split の第二引数を更新する。
-        self.update_split_right_counter(split_count, CompileError::FailQuestion)
+        self.update_instruction_address(split_count, CompileError::FailQuestion)
+
     }
 
     /// AST::Or 型に対応する Instruction を生成し、instructions に push する  
@@ -210,18 +220,13 @@ impl Compiler {
         self.instructions.push(Instruction::Jump(0));
 
         // Splitの第二引数を更新する。
-        self.update_split_right_counter(split_counter, CompileError::FailOr)?;
+        self.update_instruction_address(split_counter, CompileError::FailOr)?;
 
         // 2つ目の AST を再帰的に処理する。
         self.gen_expr(expr2)?;
 
         // Jump の引数を更新する。
-        if let Some(Instruction::Jump(arg)) = self.instructions.get_mut(jump_counter) {
-            *arg = self.p_counter;
-            Ok(())
-        } else {
-            return Err(CompileError::FailOr)
-        }
+        self.update_instruction_address(jump_counter, CompileError::FailOr)
     }
 
     /// AST::Seq 型に対応する Instruction を生成し、instructions に push する
@@ -292,62 +297,64 @@ mod tests {
     }
 
     #[test]
-    fn test_update_split_right_counter_success() {
-        // 1. Compiler インスタンスを初期化する
+    fn test_update_instruction_address_success() {
+        // Compiler を初期化。p_counter は 42 とする
         let mut compiler = Compiler {
-            p_counter: 42, // 更新後に右側アドレスとして設定される値
-            instructions: Vec::new(),
+            p_counter: 42,
+            instructions: vec![
+                Instruction::Split(10, 0), // 左側は任意の値、右側は仮値 0
+                Instruction::Jump(0)       // 仮値 0
+            ], 
         };
 
-        // 2. 仮の Split 命令を instructions に追加する
-        // 左側アドレスは任意の値 (ここでは 10) で、右側は 0 (仮の値)
-        compiler.instructions.push(Instruction::Split(10, 0));
-
-        // 3. update_split_right_counter を呼び出す
-        let result = compiler.update_split_right_counter(0, CompileError::FailOr);
-
-        // 4. 更新が成功して Ok(()) が返ることを確認する
+        // インデックス 0 の Split 命令の右側アドレスを更新する
+        let result = compiler.update_instruction_address(0, CompileError::FailOr);
         assert!(result.is_ok());
-
-        // 5. 指定したインデックスの Split 命令の右側アドレスが p_counter に更新されていることを確認する
-        if let Instruction::Split(_, right) = compiler.instructions[0] {
-            assert_eq!(right, compiler.p_counter);
+        if let Some(Instruction::Split(_, right)) = compiler.instructions.get(0) {
+            assert_eq!(*right, 42);
         } else {
-            panic!("Expected Instruction::Split at index 0");
+            panic!("インデックス 0 には Split 命令があるはずです");
+        }
+
+        // インデックス 1 の Jump 命令のアドレスを更新する
+        let result = compiler.update_instruction_address(1, CompileError::FailOr);
+        assert!(result.is_ok());
+        if let Some(Instruction::Jump(addr)) = compiler.instructions.get(1) {
+            assert_eq!(*addr, 42);
+        } else {
+            panic!("インデックス 1 には Jump 命令があるはずです");
         }
     }
 
     #[test]
-    fn test_update_split_right_counter_failure_invalid_index() {
-        // 1. Compiler インスタンスを初期化する
+    fn test_update_instruction_address_failure_invalid_index() {
         let mut compiler = Compiler {
-            p_counter: 100,
-            instructions: Vec::new(), // 空の状態
+            p_counter: 99,
+            instructions: vec![], // 空の命令リスト
         };
 
-        // 2. 存在しないインデックスを指定して更新を試みる
-        let result = compiler.update_split_right_counter(0, CompileError::FailOr);
-
-        // 3. エラーが返されることを確認する
+        let result = compiler.update_instruction_address(0, CompileError::FailOr);
         assert!(result.is_err());
         assert_eq!(result.unwrap_err(), CompileError::FailOr);
     }
 
     #[test]
-    fn test_update_split_right_counter_failure_non_split_instruction() {
-        // 1. Compiler インスタンスを初期化する
+    fn test_update_instruction_address_failure_invalid_instruction() {
         let mut compiler = Compiler {
-            p_counter: 50,
-            instructions: Vec::new(),
+            p_counter: 99,
+            instructions: vec![
+                Instruction::Char(Char::Literal('a')),
+                Instruction::Match
+            ],
         };
 
-        // 2. Split 命令以外の Instruction を挿入する（ここでは Char 命令）
-        compiler.instructions.push(Instruction::Char(Char::Literal('a')));
+        // インデックス 0 の命令は Char なのでエラーになる
+        let result = compiler.update_instruction_address(0, CompileError::FailOr);
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), CompileError::FailOr);
 
-        // 3. index 0 に対して update_split_right_counter を呼び出す
-        let result = compiler.update_split_right_counter(0, CompileError::FailOr);
-
-        // 4. Split 命令ではないため、エラーが返ることを確認する
+        // インデックス 1 の命令は Match なのでエラーになる
+        let result = compiler.update_instruction_address(1, CompileError::FailOr);
         assert!(result.is_err());
         assert_eq!(result.unwrap_err(), CompileError::FailOr);
     }
