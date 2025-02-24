@@ -34,6 +34,16 @@ impl Compiler {
         safe_add(&mut self.p_counter, &1, || CompileError::PCOverFlow)
     }
 
+    /// ヘルパー関数: 指定されたインデックスの Split 命令の右側アドレスを現在のプログラムカウンタに更新する。
+    fn update_split_right_counter(&mut self, index: usize, err: CompileError) -> Result<(), CompileError> {
+        if let Some(Instruction::Split(_, right)) = self.instructions.get_mut(index) {
+            *right = self.p_counter;
+            Ok(())
+        } else {
+            Err(err)  // 例えば、FailStar や FailQuestion、FailOr などのエラーを返す
+        }
+    }
+
     /// 入力された AST の型に応じた関数を実行する
     fn gen_expr(&mut self, ast: &AST) -> Result<(), CompileError> {
         match ast {
@@ -121,12 +131,7 @@ impl Compiler {
         self.instructions.push(Instruction::Jump(split_count));
         
         // Split の第二引数を更新する
-        if let Some(Instruction::Split(_, right)) = self.instructions.get_mut(split_count) {
-            *right = self.p_counter;
-            Ok(())
-        } else {
-            Err(CompileError::FailStar)
-        }
+        self.update_split_right_counter(split_count, CompileError::FailStar)
     }
 
     /// AST::Plus 型に対応する Instruction を生成し、instructions に push する  
@@ -170,12 +175,7 @@ impl Compiler {
         self.gen_expr(ast)?;
 
         // Split の第二引数を更新する。
-        if let Some(Instruction::Split(_, right)) = self.instructions.get_mut(split_count) {
-            *right = self.p_counter;
-            Ok(())
-        } else {
-            Err(CompileError::FailQuestion)
-        }
+        self.update_split_right_counter(split_count, CompileError::FailQuestion)
     }
 
     /// AST::Or 型に対応する Instruction を生成し、instructions に push する  
@@ -210,11 +210,7 @@ impl Compiler {
         self.instructions.push(Instruction::Jump(0));
 
         // Splitの第二引数を更新する。
-        if let Some(Instruction::Split(_, right)) = self.instructions.get_mut(split_counter) {
-            *right = self.p_counter;
-        } else {
-            return Err(CompileError::FailOr);
-        }
+        self.update_split_right_counter(split_counter, CompileError::FailOr)?;
 
         // 2つ目の AST を再帰的に処理する。
         self.gen_expr(expr2)?;
