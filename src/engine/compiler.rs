@@ -293,6 +293,49 @@ mod tests {
     }
 
     #[test]
+    fn test_insert_split_placeholder_success() {
+        // 初期状態: p_counter = 0, instructions は空
+        let mut compiler = Compiler {
+            p_counter: 0,
+            instructions: Vec::new(),
+        };
+
+        // 仮の Split 命令を挿入する
+        let result = compiler.insert_split_placeholder();
+        // 戻り値は初期の p_counter (0) であることを確認
+        assert_eq!(result, Ok(0));
+
+        // p_counter はインクリメントされ、1 になっているはず
+        assert_eq!(compiler.p_counter, 1);
+
+        // instructions に Split 命令が 1 つ挿入され、左側アドレスが p_counter (1)、
+        // 右側は仮値 (0) となっていることを確認
+        assert_eq!(compiler.instructions.len(), 1);
+        match &compiler.instructions[0] {
+            Instruction::Split(left, right) => {
+                assert_eq!(*left, 1);
+                assert_eq!(*right, 0);
+            },
+            _ => panic!("インデックス 0 には Jump 命令があるはず"),
+        }
+    }
+
+    #[test]
+    fn test_insert_split_placeholder_failure() {
+        // p_counter が usize::MAX の場合、increment_p_counter が失敗するのでエラーが返るはず
+        let mut compiler = Compiler {
+            p_counter: usize::MAX,
+            instructions: Vec::new(),
+        };
+
+        let result = compiler.insert_split_placeholder();
+        // エラーとして CompileError::PCOverFlow が返ることを確認
+        assert_eq!(result, Err(CompileError::PCOverFlow));
+        // instructions は更新されず、空のままであることを確認
+        assert!(compiler.instructions.is_empty());
+    }
+
+    #[test]
     fn test_update_instruction_address_success() {
         // Compiler を初期化。p_counter は 42 とする
         let mut compiler = Compiler {
@@ -309,7 +352,7 @@ mod tests {
         if let Some(Instruction::Split(_, right)) = compiler.instructions.get(0) {
             assert_eq!(*right, 42);
         } else {
-            panic!("インデックス 0 には Split 命令があるはずです");
+            panic!("インデックス 0 には Split 命令があるはず");
         }
 
         // インデックス 1 の Jump 命令のアドレスを更新する
@@ -318,7 +361,7 @@ mod tests {
         if let Some(Instruction::Jump(addr)) = compiler.instructions.get(1) {
             assert_eq!(*addr, 42);
         } else {
-            panic!("インデックス 1 には Jump 命令があるはずです");
+            panic!("インデックス 1 には Jump 命令があるはず");
         }
     }
 
