@@ -292,6 +292,67 @@ mod tests {
     }
 
     #[test]
+    fn test_update_split_right_counter_success() {
+        // 1. Compiler インスタンスを初期化する
+        let mut compiler = Compiler {
+            p_counter: 42, // 更新後に右側アドレスとして設定される値
+            instructions: Vec::new(),
+        };
+
+        // 2. 仮の Split 命令を instructions に追加する
+        // 左側アドレスは任意の値 (ここでは 10) で、右側は 0 (仮の値)
+        compiler.instructions.push(Instruction::Split(10, 0));
+
+        // 3. update_split_right_counter を呼び出す
+        let result = compiler.update_split_right_counter(0, CompileError::FailOr);
+
+        // 4. 更新が成功して Ok(()) が返ることを確認する
+        assert!(result.is_ok());
+
+        // 5. 指定したインデックスの Split 命令の右側アドレスが p_counter に更新されていることを確認する
+        if let Instruction::Split(_, right) = compiler.instructions[0] {
+            assert_eq!(right, compiler.p_counter);
+        } else {
+            panic!("Expected Instruction::Split at index 0");
+        }
+    }
+
+    #[test]
+    fn test_update_split_right_counter_failure_invalid_index() {
+        // 1. Compiler インスタンスを初期化する
+        let mut compiler = Compiler {
+            p_counter: 100,
+            instructions: Vec::new(), // 空の状態
+        };
+
+        // 2. 存在しないインデックスを指定して更新を試みる
+        let result = compiler.update_split_right_counter(0, CompileError::FailOr);
+
+        // 3. エラーが返されることを確認する
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), CompileError::FailOr);
+    }
+
+    #[test]
+    fn test_update_split_right_counter_failure_non_split_instruction() {
+        // 1. Compiler インスタンスを初期化する
+        let mut compiler = Compiler {
+            p_counter: 50,
+            instructions: Vec::new(),
+        };
+
+        // 2. Split 命令以外の Instruction を挿入する（ここでは Char 命令）
+        compiler.instructions.push(Instruction::Char(Char::Literal('a')));
+
+        // 3. index 0 に対して update_split_right_counter を呼び出す
+        let result = compiler.update_split_right_counter(0, CompileError::FailOr);
+
+        // 4. Split 命令ではないため、エラーが返ることを確認する
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), CompileError::FailOr);
+    }
+
+    #[test]
     fn test_gen_char_success() {
         let expect: Vec<Instruction> = vec![Instruction::Char(Char::Literal('a'))];
         let mut compiler: Compiler = Compiler {
