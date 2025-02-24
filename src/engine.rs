@@ -42,9 +42,9 @@ where
 }
 
 /// 文字列のマッチングを実行する。
-fn match_string(insts: &Vec<Instruction>, string: &str, is_end_doller: bool) -> Result<bool, RegexError> {
+fn match_string(insts: &Vec<Instruction>, string: &str, is_end_dollar: bool) -> Result<bool, RegexError> {
     let charcters: Vec<char> = string.chars().collect();
-    let match_result: bool = eval(&insts, &charcters, is_end_doller)?;
+    let match_result: bool = eval(&insts, &charcters, is_end_dollar)?;
     Ok(match_result)
 }
 
@@ -83,8 +83,8 @@ pub fn match_line(
 
     // パターンが $ で終わるかどうか。
     // 始まる場合、行末かどうかチェックをマッチに含める。
-    let is_doller: bool = is_end_doller(&pattern);
-    if is_doller {
+    let is_dollar: bool = is_end_dollar(&pattern);
+    if is_dollar {
         // パターンが $ で終わる場合、$ を取り除く。
         // AST に $ が含まれないようにするための処理。
         pattern = pattern
@@ -109,7 +109,7 @@ pub fn match_line(
     let mut is_match: bool = false;
     // パターンの1文字目が ^ の場合、行頭からのマッチのみ実行する
     if is_caret {
-        is_match = match_string(&code, &line, is_doller)?;
+        is_match = match_string(&code, &line, is_dollar)?;
     } else {
         for (i, _) in line.char_indices() {
             // abcdefg という文字列の場合、以下のように順にマッチングする。
@@ -117,7 +117,7 @@ pub fn match_line(
             //     ループ2 : bcdefg
             //     ・・・
             //     ループN : g
-            is_match = match_string(&code, &line[i..], is_doller)?;
+            is_match = match_string(&code, &line[i..], is_dollar)?;
 
             // マッチングが成功した場合、ループを抜ける
             if is_match {
@@ -139,7 +139,7 @@ fn is_beginning_caret(pattern: &str) -> bool {
 }
 
 /// パターンが $ で終わるかどうかを返す関数
-fn is_end_doller(pattern: &str) -> bool {
+fn is_end_dollar(pattern: &str) -> bool {
     let length: usize = pattern.len();
     if let Some(end) = pattern.get(length-1..length) {
         "$" == end
@@ -163,7 +163,7 @@ mod tests {
     use crate::{
         engine::{
             instruction::{Instruction, Char},
-            match_string, match_line, invert_match_result, is_beginning_caret, is_end_doller, safe_add
+            match_string, match_line, invert_match_result, is_beginning_caret, is_end_dollar, safe_add
         },
         error::{RegexError, EvalError, ParseError}
     };
@@ -271,7 +271,7 @@ mod tests {
     }
 
     #[test]
-    fn test_match_line_is_end_doller() {
+    fn test_match_line_is_end_dollar() {
         // パターンと一致する部分(abd)が行末なので、マッチすることを期待。
         // (true を期待するケース)
         let actual1: bool = match_line(
@@ -317,14 +317,14 @@ mod tests {
     }
 
     #[test]
-    fn test_is_end_doller_true() {
-        let actual: bool = is_end_doller("pattern$");
+    fn test_is_end_dollar_true() {
+        let actual: bool = is_end_dollar("pattern$");
         assert_eq!(actual, true);
     }
 
     #[test]
-    fn test_is_end_doller_false() {
-        let actual: bool = is_end_doller("pattern");
+    fn test_is_end_dollar_false() {
+        let actual: bool = is_end_dollar("pattern");
         assert_eq!(actual, false);
     }
 
