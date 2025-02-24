@@ -34,6 +34,23 @@ impl Compiler {
         safe_add(&mut self.p_counter, &1, || CompileError::PCOverFlow)
     }
 
+    /// ヘルパー関数: 第二引数が仮値の Split 命令を命令列に挿入する。
+    /// 
+    /// 命令列に split を挿入する際、第二引数に指定するコードが、挿入時点ではまだ値がわからない。  
+    /// そのため、ここでは仮の数値(0)を入れて、数値は後で更新する。
+    ///
+    /// この関数は、以下の手順で動作する。
+    /// 1. 現在のプログラムカウンタ値を記録する。
+    /// 2. p_counter をインクリメントする（Split 命令の左側アドレスとして使用）。
+    /// 3. Instruction::Split(左側アドレス, 仮の右側アドレス(0)) を命令列に追加。
+    /// 4. 挿入した命令のインデックスを返す。
+    fn insert_split_placeholder(&mut self) -> Result<usize, CompileError> {
+        let placeholder_index: usize = self.p_counter;
+        self.increment_p_counter()?;
+        self.instructions.push(Instruction::Split(self.p_counter, 0));
+        Ok(placeholder_index)
+    }
+
     /// ヘルパー関数: 指定されたインデックスの命令が Split または Jump 命令であれば、
     /// そのアドレスを現在のプログラムカウンタに更新する。
     ///
@@ -124,13 +141,8 @@ impl Compiler {
     /// 3 : ... 続き
     /// ```
     fn gen_star(&mut self, ast: &AST) -> Result<(), CompileError> {
-        // 後で使うので、現在のポインタを変数に格納する
-        let split_count: usize = self.p_counter;
-
-        self.increment_p_counter()?;
-        // split を挿入する。第二引数には expr2 のコードの開始のカウンタを指定する必要があるが、
-        // この時点ではまだ値がわからないので、ここでは仮の数値(0)を入れて、数値は後で更新する。
-        self.instructions.push(Instruction::Split(self.p_counter, 0));
+        // split を挿入する。後で更新するため、格納した index を split_count に保持する。
+        let split_count: usize = self.insert_split_placeholder()?;
 
         // AST を再帰的に処理する
         self.gen_expr(ast)?;
@@ -171,15 +183,8 @@ impl Compiler {
     /// 2 : ... 続き
     /// ```
     fn gen_question(&mut self, ast: &AST) -> Result<(), CompileError> {
-        // 後で使うので、現在のポインタを変数に格納する。
-        let split_count: usize = self.p_counter;
-
-        self.increment_p_counter()?;
-
-        // split を挿入する。第二引数には expr2 のコードの開始のカウンタを指定する必要があるが、
-        // この時点ではまだ値がわからないので、ここでは仮の数値(0)を入れて、数値は後で更新する。
-        self.instructions.push(Instruction::Split(self.p_counter, 0));
-        
+        // split を挿入する。後で更新するため、格納した index を split_count に保持する。
+        let split_count: usize = self.insert_split_placeholder()?;        
         // AST を再帰的に処理する。
         self.gen_expr(ast)?;
 
@@ -199,34 +204,25 @@ impl Compiler {
     /// 4 : ... 続き
     /// ```
     fn gen_or(&mut self, expr1: &AST, expr2: &AST) -> Result<(), CompileError> {
-        // 後で使うので、現在のポインタを変数に格納する。
-        let split_counter: usize = self.p_counter;
-
-        self.increment_p_counter()?;
-
-        // split を挿入する。第二引数には expr2 のコードの開始のカウンタを指定する必要があるが、
-        // この時点ではまだ値がわからないので、ここでは仮の数値(0)を入れて、数値は後で更新する。
-        self.instructions.push(Instruction::Split(self.p_counter, 0));
-
+        // split を挿入する。後で更新するため、格納した index を split_count に保持する。
+        let split_count: usize = self.insert_split_placeholder()?;
         // 1つ目の AST を再帰的に処理する。
         self.gen_expr(expr1)?;
 
-        let jump_counter: usize = self.p_counter;
-
+        let jump_count: usize = self.p_counter;
         self.increment_p_counter()?;
-
         // Jump を挿入する。引数には expr2 のコードの次のカウンタを指定する必要があるが、
         // この時点ではまだ値がわからないので、ここでは仮の数値(0)を入れて、数値は後で更新する。
         self.instructions.push(Instruction::Jump(0));
 
         // Splitの第二引数を更新する。
-        self.update_instruction_address(split_counter, CompileError::FailOr)?;
+        self.update_instruction_address(split_count, CompileError::FailOr)?;
 
         // 2つ目の AST を再帰的に処理する。
         self.gen_expr(expr2)?;
 
         // Jump の引数を更新する。
-        self.update_instruction_address(jump_counter, CompileError::FailOr)
+        self.update_instruction_address(jump_count, CompileError::FailOr)
     }
 
     /// AST::Seq 型に対応する Instruction を生成し、instructions に push する
