@@ -42,8 +42,8 @@ where
 }
 
 /// 文字列のマッチングを実行する。
-fn match_string(insts: &Vec<Instruction>, string: &str, is_end_dollar: bool) -> Result<bool, RegexError> {
-    let charcters: Vec<char> = string.chars().collect();
+fn match_string(insts: &Vec<Instruction>, str: &str, is_end_dollar: bool) -> Result<bool, RegexError> {
+    let charcters: Vec<char> = str.chars().collect();
     let match_result: bool = eval(&insts, &charcters, is_end_dollar)?;
     Ok(match_result)
 }

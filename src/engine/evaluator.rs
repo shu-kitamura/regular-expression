@@ -1,7 +1,5 @@
 //! Instruction と char配列を受け取って評価する
 
-use std::usize;
-
 use crate::{
     error::EvalError,
     engine::{
