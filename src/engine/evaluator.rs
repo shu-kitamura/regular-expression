@@ -9,7 +9,7 @@ use crate::{
 };
 
 /// char と Instruction を評価する
-fn eval_char(inst: &Char, chars: &Vec<char>, index: usize)-> bool {
+fn eval_char(inst: &Char, chars: &[char], index: usize)-> bool {
     let inst_char = match inst {
         Char::Literal(c) => c,
         Char::Any => return true
@@ -36,7 +36,7 @@ fn increment_pc_and_index(pc: &mut usize, index: &mut usize) -> Result<(), EvalE
 /// 深さ優先探索で再帰的にマッチングを行う関数
 fn eval_depth(
     instructions: &[Instruction],
-    chars: &Vec<char>,
+    chars: &[char],
     mut p_counter: usize,
     mut char_index: usize,
     is_end_doller: bool
@@ -81,7 +81,7 @@ fn eval_depth(
 }
 
 /// 命令列の評価を行う関数
-pub fn eval(inst: &[Instruction], chars:&Vec<char>, is_end_doller: bool) -> Result<bool, EvalError> {
+pub fn eval(inst: &[Instruction], chars:&[char], is_end_doller: bool) -> Result<bool, EvalError> {
     eval_depth(inst, chars, 0, 0, is_end_doller)
 }
 
