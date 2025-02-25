@@ -22,7 +22,7 @@ pub enum Char {
 impl Display for Instruction {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Instruction::Char(char) => match char {
+            Instruction::Char(inst_char) => match inst_char {
                 Char::Literal(c) => write!(f, "char {}", c),
                 Char::Any => write!(f, "char any")
             },
