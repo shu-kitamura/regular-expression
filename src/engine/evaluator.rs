@@ -69,12 +69,8 @@ fn eval_depth(
                 if chars.len() <= char_index {
                     return Ok(false)
                 }
-                if eval_depth(instructions, chars, *addr1, char_index, is_end_doller)?
-                    || eval_depth(instructions, chars, *addr2, char_index, is_end_doller)? {
-                    return Ok(true);
-                } else {
-                    return Ok(false);
-                }
+                return Ok(eval_depth(instructions, chars, *addr1, char_index, is_end_doller)?
+                    || eval_depth(instructions, chars, *addr2, char_index, is_end_doller)?)
             }
         }
     }
