@@ -111,6 +111,12 @@ mod tests {
     }
 
     #[test]
+    fn test_eval_char_any() {
+        let actual: bool = eval_char(&Char::Any, &vec!['a', 'b', 'c'], 0);
+        assert_eq!(actual, true);
+    }
+
+    #[test]
     fn test_increment_success() {
         let pc: &mut usize = &mut 10;
         let index: &mut usize = &mut 10;

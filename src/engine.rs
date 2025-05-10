@@ -129,21 +129,12 @@ pub fn match_line(
 
 /// パターンが ^ で始まるかどうかを返す関数
 fn is_beginning_caret(pattern: &str) -> bool {
-    if let Some(beginning) = pattern.get(..1) {
-        "^" == beginning
-    } else {
-        false
-    }
+    pattern.starts_with('^')
 }
 
 /// パターンが $ で終わるかどうかを返す関数
 fn is_end_dollar(pattern: &str) -> bool {
-    let length: usize = pattern.len();
-    if let Some(end) = pattern.get(length - 1..length) {
-        "$" == end
-    } else {
-        false
-    }
+    pattern.ends_with('$')
 }
 
 /// マッチ結果を反転させる関数  
