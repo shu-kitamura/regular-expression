@@ -27,10 +27,8 @@ fn increment_pc_and_index(pc: &mut usize, index: &mut usize) -> Result<(), EvalE
         Ok(()) => {}
         Err(e) => return Err(e),
     };
-    match safe_add(index, &1, || EvalError::CharIndexOverFlow) {
-        Ok(()) => Ok(()),
-        Err(e) => return Err(e),
-    }
+
+    safe_add(index, &1, || EvalError::CharIndexOverFlow)
 }
 
 /// 深さ優先探索で再帰的にマッチングを行う関数

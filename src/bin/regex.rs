@@ -72,9 +72,8 @@ impl Args {
             }
         } else {
             // -e オプションありの場合、位置引数の値を files に挿入する。
-            match &self.pattern {
-                Some(file) => self.files.insert(0, file.to_owned()),
-                None => {}
+            if let Some(file) = &self.pattern {
+                self.files.insert(0, file.to_owned())
             }
         }
 
@@ -137,7 +136,7 @@ fn main() {
         let mut buf_reader: BufReader<Stdin> = BufReader::new(stdin);
 
         // 標準入力を1行ずつ read し、マッチングを実行する
-        match match_file(
+        if let Some(c) = match_file(
             &mut buf_reader,
             "(standard input)", // grep コマンドでパイプ使用時にファイル名を表示したら、(standard input)なるのでそれに合わせる。
             &patterns,
@@ -147,8 +146,7 @@ fn main() {
             args.count,
             args.line_number,
         ) {
-            Some(c) => matching_count += c,
-            None => {}
+            matching_count += c
         }
     } else {
         for file in files {
@@ -162,7 +160,7 @@ fn main() {
             };
 
             // ファイルを1行ずつ read し、マッチングを実行する
-            match match_file(
+            if let Some(c) = match_file(
                 &mut buf_reader,
                 file,
                 &patterns,
@@ -172,8 +170,7 @@ fn main() {
                 args.count,
                 args.line_number,
             ) {
-                Some(c) => matching_count += c,
-                None => {}
+                matching_count += c
             };
         }
     }

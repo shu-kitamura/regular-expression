@@ -9,7 +9,7 @@ use crate::{
         compiler::compile,
         evaluator::eval,
         instruction::Instruction,
-        parser::{parse, AST},
+        parser::{parse, Ast},
     },
     error::RegexError,
 };
@@ -42,13 +42,9 @@ where
 }
 
 /// 文字列のマッチングを実行する。
-fn match_string(
-    insts: &Vec<Instruction>,
-    str: &str,
-    is_end_dollar: bool,
-) -> Result<bool, RegexError> {
+fn match_string(insts: &[Instruction], str: &str, is_end_dollar: bool) -> Result<bool, RegexError> {
     let charcters: Vec<char> = str.chars().collect();
-    let match_result: bool = eval(&insts, &charcters, is_end_dollar)?;
+    let match_result: bool = eval(insts, &charcters, is_end_dollar)?;
     Ok(match_result)
 }
 
@@ -78,7 +74,7 @@ pub fn match_line(
     let is_caret: bool = is_beginning_caret(&pattern);
     if is_caret {
         // パターンが ^ で始まる場合、^ を取り除く。
-        // AST に ^ が含まれないようにするための処理。
+        // Ast に ^ が含まれないようにするための処理。
         pattern = pattern.strip_prefix("^").unwrap().to_string();
     }
 
@@ -87,7 +83,7 @@ pub fn match_line(
     let is_dollar: bool = is_end_dollar(&pattern);
     if is_dollar {
         // パターンが $ で終わる場合、$ を取り除く。
-        // AST に $ が含まれないようにするための処理。
+        // Ast に $ が含まれないようにするための処理。
         pattern = pattern.strip_suffix("$").unwrap().to_string();
     }
 
@@ -98,10 +94,10 @@ pub fn match_line(
         line = line.to_lowercase();
     }
 
-    // パターンから AST を生成する。
-    let ast: AST = parse(pattern.as_str())?;
+    // パターンから Ast を生成する。
+    let ast: Ast = parse(pattern.as_str())?;
 
-    // AST から コード(Instructionの配列)を生成する。
+    // Ast から コード(Instructionの配列)を生成する。
     let code: Vec<Instruction> = compile(&ast)?;
 
     let mut is_match: bool = false;
@@ -201,7 +197,7 @@ mod tests {
         ];
 
         let actual = match_string(&insts, "abc", false);
-        assert_eq!(actual, Err(RegexError::EvalError(EvalError::InvalidPC)));
+        assert_eq!(actual, Err(RegexError::Eval(EvalError::InvalidPC)));
     }
 
     #[test]
@@ -273,10 +269,7 @@ mod tests {
     #[test]
     fn test_match_line_parse_error() {
         let actual = match_line("ab(c|d".to_string(), "a".to_string(), false, false);
-        assert_eq!(
-            actual,
-            Err(RegexError::ParseError(ParseError::NoRightParen))
-        );
+        assert_eq!(actual, Err(RegexError::Parse(ParseError::NoRightParen)));
     }
 
     #[test]
@@ -325,9 +318,7 @@ mod tests {
     fn test_safe_add_success() {
         use crate::error::CompileError;
         let mut u: usize = 1;
-        let _ = safe_add(&mut u, &1, || {
-            RegexError::CompileError(CompileError::PCOverFlow)
-        });
+        let _ = safe_add(&mut u, &1, || RegexError::Compile(CompileError::PCOverFlow));
         assert_eq!(u, 2);
     }
 
@@ -335,12 +326,10 @@ mod tests {
     fn test_safe_add_failure() {
         use crate::error::CompileError;
 
-        let expect = RegexError::CompileError(CompileError::PCOverFlow);
+        let expect = RegexError::Compile(CompileError::PCOverFlow);
         let mut u: usize = usize::MAX;
-        let actual: RegexError = safe_add(&mut u, &1, || {
-            RegexError::CompileError(CompileError::PCOverFlow)
-        })
-        .unwrap_err();
+        let actual: RegexError =
+            safe_add(&mut u, &1, || RegexError::Compile(CompileError::PCOverFlow)).unwrap_err();
         assert_eq!(actual, expect);
     }
 }

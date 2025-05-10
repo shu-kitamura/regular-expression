@@ -23,7 +23,7 @@ pub enum ParseError {
 
 /// コンパイルエラーを示す型
 ///
-/// AST から命令コードへの変換（コンパイル）時に発生するエラーを表現する。
+/// Ast から命令コードへの変換（コンパイル）時に発生するエラーを表現する。
 /// 命令の生成中にリソースがオーバーフローした場合や、特定の演算子の変換に失敗した場合に使用される。
 #[derive(Debug, Error, PartialEq)]
 pub enum CompileError {
@@ -56,9 +56,9 @@ pub enum EvalError {
 #[derive(Debug, Error, PartialEq)]
 pub enum RegexError {
     #[error(transparent)]
-    CompileError(#[from] CompileError),
+    Compile(#[from] CompileError),
     #[error(transparent)]
-    EvalError(#[from] EvalError),
+    Eval(#[from] EvalError),
     #[error(transparent)]
-    ParseError(#[from] ParseError),
+    Parse(#[from] ParseError),
 }

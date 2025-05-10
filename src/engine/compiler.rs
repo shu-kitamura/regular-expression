@@ -1,4 +1,4 @@
-//! AST を命令列(Instruction)にコンパイルするための型・関数  
+//! Ast を命令列(Instruction)にコンパイルするための型・関数  
 //! "ab(c|b)" が入力された場合、以下にコンパイルする
 //! (左の数字はプログラムカウンタ)
 //!
@@ -15,7 +15,7 @@
 use crate::{
     engine::{
         instruction::{Char, Instruction},
-        parser::AST,
+        parser::Ast,
         safe_add,
     },
     error::CompileError,
@@ -75,54 +75,54 @@ impl Compiler {
         }
     }
 
-    /// 入力された AST の型に応じた関数を実行する
-    fn gen_expr(&mut self, ast: &AST) -> Result<(), CompileError> {
+    /// 入力された Ast の型に応じた関数を実行する
+    fn gen_expr(&mut self, ast: &Ast) -> Result<(), CompileError> {
         match ast {
-            AST::AnyChar => self.gen_anychar(),
-            AST::Char(c) => self.gen_char(*c),
-            AST::Or(e1, e2) => self.gen_or(e1, e2),
-            AST::Plus(ast) => match &**ast {
-                AST::Star(child_ast) => self.gen_expr(&child_ast),
-                AST::Seq(child_vec) if child_vec.len() == 1 => {
-                    if let Some(child_ast @ AST::Star(_)) = child_vec.get(0) {
-                        self.gen_expr(&child_ast)
+            Ast::AnyChar => self.gen_anychar(),
+            Ast::Char(c) => self.gen_char(*c),
+            Ast::Or(e1, e2) => self.gen_or(e1, e2),
+            Ast::Plus(ast) => match &**ast {
+                Ast::Star(child_ast) => self.gen_expr(child_ast),
+                Ast::Seq(child_vec) if child_vec.len() == 1 => {
+                    if let Some(child_ast @ Ast::Star(_)) = child_vec.first() {
+                        self.gen_expr(child_ast)
                     } else {
                         self.gen_expr(ast)
                     }
                 }
-                AST::Or(child_ast1, child_ast2) => {
-                    match self.gen_expr(&child_ast1) {
+                Ast::Or(child_ast1, child_ast2) => {
+                    match self.gen_expr(child_ast1) {
                         Ok(()) => {}
                         Err(e) => return Err(e),
                     };
-                    self.gen_expr(&child_ast2)
+                    self.gen_expr(child_ast2)
                 }
                 e => self.gen_plus(e),
             },
-            AST::Star(ast) => match &**ast {
-                AST::Star(child_ast) => self.gen_expr(&child_ast),
-                AST::Seq(child_vec) if child_vec.len() == 1 => {
-                    if let Some(child_ast @ AST::Star(_)) = child_vec.get(0) {
-                        self.gen_expr(&child_ast)
+            Ast::Star(ast) => match &**ast {
+                Ast::Star(child_ast) => self.gen_expr(child_ast),
+                Ast::Seq(child_vec) if child_vec.len() == 1 => {
+                    if let Some(child_ast @ Ast::Star(_)) = child_vec.first() {
+                        self.gen_expr(child_ast)
                     } else {
                         self.gen_expr(ast)
                     }
                 }
-                AST::Or(child_ast1, child_ast2) => {
-                    match self.gen_expr(&child_ast1) {
+                Ast::Or(child_ast1, child_ast2) => {
+                    match self.gen_expr(child_ast1) {
                         Ok(()) => {}
                         Err(e) => return Err(e),
                     };
-                    self.gen_expr(&child_ast2)
+                    self.gen_expr(child_ast2)
                 }
                 e => self.gen_star(e),
             },
-            AST::Question(ast) => self.gen_question(ast),
-            AST::Seq(v) => self.gen_seq(v),
+            Ast::Question(ast) => self.gen_question(ast),
+            Ast::Seq(v) => self.gen_seq(v),
         }
     }
 
-    /// AST::Char 型に対応する Instruction を生成し、instructions に push する
+    /// Ast::Char 型に対応する Instruction を生成し、instructions に push する
     fn gen_char(&mut self, c: char) -> Result<(), CompileError> {
         let inst: Instruction = Instruction::Char(Char::Literal(c));
         self.increment_p_counter()?;
@@ -130,7 +130,7 @@ impl Compiler {
         Ok(())
     }
 
-    /// AST::AnyChar 型に対応する Instruction を生成し、instractions に push する
+    /// Ast::AnyChar 型に対応する Instruction を生成し、instractions に push する
     fn gen_anychar(&mut self) -> Result<(), CompileError> {
         let inst: Instruction = Instruction::Char(Char::Any);
         self.increment_p_counter()?;
@@ -138,7 +138,7 @@ impl Compiler {
         Ok(())
     }
 
-    /// AST::Star 型に対応する Instruction を生成し、instructions に push する  
+    /// Ast::Star 型に対応する Instruction を生成し、instructions に push する  
     /// a* 入力された場合、以下のような Instruction を生成する  
     ///
     /// ```text
@@ -147,11 +147,11 @@ impl Compiler {
     /// 2 : jump 0
     /// 3 : ... 続き
     /// ```
-    fn gen_star(&mut self, ast: &AST) -> Result<(), CompileError> {
+    fn gen_star(&mut self, ast: &Ast) -> Result<(), CompileError> {
         // split を挿入する。後で更新するため、格納した index を split_count に保持する。
         let split_count: usize = self.insert_split_placeholder()?;
 
-        // AST を再帰的に処理する
+        // Ast を再帰的に処理する
         self.gen_expr(ast)?;
 
         // カウンタをインクリメントし、Jump を挿入する
@@ -162,7 +162,7 @@ impl Compiler {
         self.update_instruction_address(split_count, CompileError::FailStar)
     }
 
-    /// AST::Plus 型に対応する Instruction を生成し、instructions に push する  
+    /// Ast::Plus 型に対応する Instruction を生成し、instructions に push する  
     /// a+ 入力された場合、以下のような Instruction を生成する  
     ///
     /// ```text
@@ -170,9 +170,9 @@ impl Compiler {
     /// 1 : split 0, 2
     /// 2 : ... 続き
     /// ```
-    fn gen_plus(&mut self, ast: &AST) -> Result<(), CompileError> {
+    fn gen_plus(&mut self, ast: &Ast) -> Result<(), CompileError> {
         let left: usize = self.p_counter;
-        // AST を再帰的に処理する
+        // Ast を再帰的に処理する
         self.gen_expr(ast)?;
 
         // カウンタをインクリメントし Split を挿入する
@@ -182,7 +182,7 @@ impl Compiler {
         Ok(())
     }
 
-    /// AST::Question 型に対応する Instruction を生成し、instructions に push する  
+    /// Ast::Question 型に対応する Instruction を生成し、instructions に push する  
     /// a? 入力された場合、以下のような Instruction を生成する  
     ///
     /// ```text
@@ -190,17 +190,17 @@ impl Compiler {
     /// 1 : Char(a)
     /// 2 : ... 続き
     /// ```
-    fn gen_question(&mut self, ast: &AST) -> Result<(), CompileError> {
+    fn gen_question(&mut self, ast: &Ast) -> Result<(), CompileError> {
         // split を挿入する。後で更新するため、格納した index を split_count に保持する。
         let split_count: usize = self.insert_split_placeholder()?;
-        // AST を再帰的に処理する。
+        // Ast を再帰的に処理する。
         self.gen_expr(ast)?;
 
         // Split の第二引数を更新する。
         self.update_instruction_address(split_count, CompileError::FailQuestion)
     }
 
-    /// AST::Or 型に対応する Instruction を生成し、instructions に push する  
+    /// Ast::Or 型に対応する Instruction を生成し、instructions に push する  
     /// a|b が入力された場合、以下のような Instruction を生成する。  
     ///
     /// ```text
@@ -210,10 +210,10 @@ impl Compiler {
     /// 3 : Char(b)
     /// 4 : ... 続き
     /// ```
-    fn gen_or(&mut self, expr1: &AST, expr2: &AST) -> Result<(), CompileError> {
+    fn gen_or(&mut self, expr1: &Ast, expr2: &Ast) -> Result<(), CompileError> {
         // split を挿入する。後で更新するため、格納した index を split_count に保持する。
         let split_count: usize = self.insert_split_placeholder()?;
-        // 1つ目の AST を再帰的に処理する。
+        // 1つ目の Ast を再帰的に処理する。
         self.gen_expr(expr1)?;
 
         let jump_count: usize = self.p_counter;
@@ -225,25 +225,25 @@ impl Compiler {
         // Splitの第二引数を更新する。
         self.update_instruction_address(split_count, CompileError::FailOr)?;
 
-        // 2つ目の AST を再帰的に処理する。
+        // 2つ目の Ast を再帰的に処理する。
         self.gen_expr(expr2)?;
 
         // Jump の引数を更新する。
         self.update_instruction_address(jump_count, CompileError::FailOr)
     }
 
-    /// AST::Seq 型に対応する Instruction を生成し、instructions に push する
-    fn gen_seq(&mut self, vec: &Vec<AST>) -> Result<(), CompileError> {
+    /// Ast::Seq 型に対応する Instruction を生成し、instructions に push する
+    fn gen_seq(&mut self, vec: &Vec<Ast>) -> Result<(), CompileError> {
         for ast in vec {
             self.gen_expr(ast)?;
         }
         Ok(())
     }
 
-    /// AST から Instruction を生成し、instructions に push する  
+    /// Ast から Instruction を生成し、instructions に push する  
     /// 最後に Match を instructions に push する
-    fn gen_code(&mut self, ast: &AST) -> Result<(), CompileError> {
-        // AST から Instruction を生成し、instructions に挿入する
+    fn gen_code(&mut self, ast: &Ast) -> Result<(), CompileError> {
+        // Ast から Instruction を生成し、instructions に挿入する
         self.gen_expr(ast)?;
 
         // Match を instructions に挿入する
@@ -254,7 +254,7 @@ impl Compiler {
 }
 
 /// コード生成を行う関数
-pub fn compile(ast: &AST) -> Result<Vec<Instruction>, CompileError> {
+pub fn compile(ast: &Ast) -> Result<Vec<Instruction>, CompileError> {
     let mut compiler: Compiler = Compiler::default();
     compiler.gen_code(ast)?;
     Ok(compiler.instructions)
@@ -269,7 +269,7 @@ mod tests {
         engine::{
             compiler::{compile, Compiler},
             instruction::{Char, Instruction},
-            parser::AST,
+            parser::Ast,
         },
         error::CompileError,
     };
@@ -453,7 +453,7 @@ mod tests {
             instructions: Vec::new(),
         };
 
-        let ast: Box<AST> = Box::new(AST::Char('a'));
+        let ast: Box<Ast> = Box::new(Ast::Char('a'));
 
         let _ = compiler.gen_star(&ast);
         let actual: Vec<Instruction> = compiler.instructions;
@@ -470,7 +470,7 @@ mod tests {
             instructions: Vec::new(),
         };
 
-        let ast: Box<AST> = Box::new(AST::Char('a'));
+        let ast: Box<Ast> = Box::new(Ast::Char('a'));
 
         let actual: Result<(), CompileError> = compiler.gen_star(&ast);
         assert_eq!(actual, expect);
@@ -489,7 +489,7 @@ mod tests {
             instructions: Vec::new(),
         };
 
-        let ast: Box<AST> = Box::new(AST::Char('a'));
+        let ast: Box<Ast> = Box::new(Ast::Char('a'));
 
         let _ = compiler.gen_plus(&ast);
         let actual: Vec<Instruction> = compiler.instructions;
@@ -509,7 +509,7 @@ mod tests {
             instructions: Vec::new(),
         };
 
-        let ast: Box<AST> = Box::new(AST::Char('a'));
+        let ast: Box<Ast> = Box::new(Ast::Char('a'));
 
         let _ = compiler.gen_question(&ast);
         let actual: Vec<Instruction> = compiler.instructions;
@@ -524,7 +524,7 @@ mod tests {
             p_counter: 100,
             instructions: Vec::new(),
         };
-        let ast: Box<AST> = Box::new(AST::Char('a'));
+        let ast: Box<Ast> = Box::new(Ast::Char('a'));
 
         let actual: Result<(), CompileError> = compiler.gen_question(&ast);
         assert_eq!(actual, expect);
@@ -545,8 +545,8 @@ mod tests {
             instructions: Vec::new(),
         };
 
-        let e1: Box<AST> = Box::new(AST::Seq(vec![AST::Char('a')]));
-        let e2: Box<AST> = Box::new(AST::Seq(vec![AST::Char('b')]));
+        let e1: Box<Ast> = Box::new(Ast::Seq(vec![Ast::Char('a')]));
+        let e2: Box<Ast> = Box::new(Ast::Seq(vec![Ast::Char('b')]));
 
         let _ = compiler.gen_or(&e1, &e2);
         let actual: Vec<Instruction> = compiler.instructions;
@@ -562,8 +562,8 @@ mod tests {
             instructions: Vec::new(),
         };
 
-        let e1: Box<AST> = Box::new(AST::Seq(vec![AST::Char('a')]));
-        let e2: Box<AST> = Box::new(AST::Seq(vec![AST::Char('b')]));
+        let e1: Box<Ast> = Box::new(Ast::Seq(vec![Ast::Char('a')]));
+        let e2: Box<Ast> = Box::new(Ast::Seq(vec![Ast::Char('b')]));
 
         let actual: Result<(), CompileError> = compiler.gen_or(&e1, &e2);
         assert_eq!(actual, expect);
@@ -577,7 +577,7 @@ mod tests {
             Instruction::Char(Char::Literal('c')),
         ];
 
-        let v: Vec<AST> = vec![AST::Char('a'), AST::Char('b'), AST::Char('c')];
+        let v: Vec<Ast> = vec![Ast::Char('a'), Ast::Char('b'), Ast::Char('c')];
 
         let mut compiler: Compiler = Compiler {
             p_counter: 0,
@@ -605,9 +605,9 @@ mod tests {
             instructions: Vec::new(),
         };
 
-        let e1: Box<AST> = Box::new(AST::Seq(vec![AST::Char('a')]));
-        let e2: Box<AST> = Box::new(AST::Seq(vec![AST::Char('b')]));
-        let or = AST::Or(e1, e2);
+        let e1: Box<Ast> = Box::new(Ast::Seq(vec![Ast::Char('a')]));
+        let e2: Box<Ast> = Box::new(Ast::Seq(vec![Ast::Char('b')]));
+        let or = Ast::Or(e1, e2);
 
         let _ = compiler.gen_code(&or);
         let actual: Vec<Instruction> = compiler.instructions;
@@ -624,9 +624,9 @@ mod tests {
             Instruction::Match,
         ];
 
-        let e1: Box<AST> = Box::new(AST::Seq(vec![AST::Char('a')]));
-        let e2: Box<AST> = Box::new(AST::Seq(vec![AST::Char('b')]));
-        let or = AST::Or(e1, e2);
+        let e1: Box<Ast> = Box::new(Ast::Seq(vec![Ast::Char('a')]));
+        let e2: Box<Ast> = Box::new(Ast::Seq(vec![Ast::Char('b')]));
+        let or = Ast::Or(e1, e2);
 
         let actual = compile(&or).unwrap();
         assert_eq!(actual, expect);

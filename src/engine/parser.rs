@@ -1,6 +1,6 @@
 //! 正規表現の式をパースするための型・関数  
-//! 式をパースして、抽象構文木(AST)に変換する。  
-//! "abc(def|ghi)"" が入力された場合、以下の AST に変換する  
+//! 式をパースして、抽象構文木(Ast)に変換する。  
+//! "abc(def|ghi)"" が入力された場合、以下の Ast に変換する  
 //!
 //! ```text
 //! Seq(
@@ -25,56 +25,56 @@
 use crate::error::ParseError;
 use std::mem::take;
 
-/// AST の型
+/// Ast の型
 #[derive(Debug, PartialEq)]
-pub enum AST {
+pub enum Ast {
     AnyChar,                // '.'に対応する型
     Char(char),             // 通常の文字に対応する型
-    Plus(Box<AST>),         // '+'に対応する型
-    Star(Box<AST>),         // '*'に対応する型
-    Question(Box<AST>),     // '?'に対応する型
-    Or(Box<AST>, Box<AST>), // '|'に対応する型
-    Seq(Vec<AST>),          // 連結に対応する型
+    Plus(Box<Ast>),         // '+'に対応する型
+    Star(Box<Ast>),         // '*'に対応する型
+    Question(Box<Ast>),     // '?'に対応する型
+    Or(Box<Ast>, Box<Ast>), // '|'に対応する型
+    Seq(Vec<Ast>),          // 連結に対応する型
 }
 
-/// エスケープ文字から AST を生成
-fn parse_escape(pos: usize, c: char) -> Result<AST, ParseError> {
+/// エスケープ文字から Ast を生成
+fn parse_escape(pos: usize, c: char) -> Result<Ast, ParseError> {
     match c {
-        '\\' | '(' | ')' | '|' | '+' | '*' | '?' | '.' => Ok(AST::Char(c)),
+        '\\' | '(' | ')' | '|' | '+' | '*' | '?' | '.' => Ok(Ast::Char(c)),
         _ => Err(ParseError::InvalidEscape(pos, c)),
     }
 }
 
-/// `+`,`*`,`?`から AST を生成
-fn parse_qualifier(qualifier: char, prev: AST) -> AST {
+/// `+`,`*`,`?`から Ast を生成
+fn parse_qualifier(qualifier: char, prev: Ast) -> Ast {
     match qualifier {
-        '+' => AST::Plus(Box::new(prev)),
-        '*' => AST::Star(Box::new(prev)),
-        '?' => AST::Question(Box::new(prev)),
+        '+' => Ast::Plus(Box::new(prev)),
+        '*' => Ast::Star(Box::new(prev)),
+        '?' => Ast::Question(Box::new(prev)),
         _ => unreachable!(), // 呼び出し方から、到達しないことが確定している
     }
 }
 
-/// `|` を含む式から AST を生成
+/// `|` を含む式から Ast を生成
 ///
-/// 入力されたASTが [AST1, AST2, AST3] の場合、以下の AST を生成する
+/// 入力されたAstが [Ast1, Ast2, Ast3] の場合、以下の Ast を生成する
 /// ```text
-/// AST::Or(
-///     AST1,
-///     AST::Or(
-///         AST2,
-///         AST3
+/// Ast::Or(
+///     Ast1,
+///     Ast::Or(
+///         Ast2,
+///         Ast3
 ///     )
 /// )
 /// ```
 ///
-fn fold_or(mut seq_or: Vec<AST>) -> Option<AST> {
+fn fold_or(mut seq_or: Vec<Ast>) -> Option<Ast> {
     if seq_or.len() > 1 {
-        let mut ast: AST = seq_or.pop().unwrap();
-        // AST を逆順で結合するため、reverse メソッドを呼び出す
+        let mut ast: Ast = seq_or.pop().unwrap();
+        // Ast を逆順で結合するため、reverse メソッドを呼び出す
         seq_or.reverse();
         for s in seq_or {
-            ast = AST::Or(Box::new(s), Box::new(ast));
+            ast = Ast::Or(Box::new(s), Box::new(ast));
         }
         Some(ast)
     } else {
@@ -82,11 +82,11 @@ fn fold_or(mut seq_or: Vec<AST>) -> Option<AST> {
     }
 }
 
-/// 式をパースし、ASTを生成
-pub fn parse(pattern: &str) -> Result<AST, ParseError> {
-    let mut seq: Vec<AST> = Vec::new();
-    let mut seq_or: Vec<AST> = Vec::new();
-    let mut stack: Vec<(Vec<AST>, Vec<AST>)> = Vec::new();
+/// 式をパースし、Astを生成
+pub fn parse(pattern: &str) -> Result<Ast, ParseError> {
+    let mut seq: Vec<Ast> = Vec::new();
+    let mut seq_or: Vec<Ast> = Vec::new();
+    let mut stack: Vec<(Vec<Ast>, Vec<Ast>)> = Vec::new();
     let mut is_escape: bool = false;
 
     for (pos, c) in pattern.chars().enumerate() {
@@ -103,21 +103,21 @@ pub fn parse(pattern: &str) -> Result<AST, ParseError> {
         match c {
             '+' | '*' | '?' => {
                 if let Some(prev_ast) = seq.pop() {
-                    let ast: AST = parse_qualifier(c, prev_ast);
+                    let ast: Ast = parse_qualifier(c, prev_ast);
                     seq.push(ast);
                 } else {
                     return Err(ParseError::NoPrev(pos));
                 }
             }
             '(' => {
-                let prev: Vec<AST> = take(&mut seq);
-                let prev_or: Vec<AST> = take(&mut seq_or);
+                let prev: Vec<Ast> = take(&mut seq);
+                let prev_or: Vec<Ast> = take(&mut seq_or);
                 stack.push((prev, prev_or));
             }
             ')' => {
                 if let Some((mut prev, prev_or)) = stack.pop() {
                     if !seq.is_empty() {
-                        seq_or.push(AST::Seq(seq));
+                        seq_or.push(Ast::Seq(seq));
                     }
 
                     if let Some(ast) = fold_or(seq_or) {
@@ -131,12 +131,12 @@ pub fn parse(pattern: &str) -> Result<AST, ParseError> {
                 }
             }
             '|' => {
-                let prev: Vec<AST> = take(&mut seq);
-                seq_or.push(AST::Seq(prev));
+                let prev: Vec<Ast> = take(&mut seq);
+                seq_or.push(Ast::Seq(prev));
             }
             '\\' => is_escape = true,
-            '.' => seq.push(AST::AnyChar),
-            _ => seq.push(AST::Char(c)),
+            '.' => seq.push(Ast::AnyChar),
+            _ => seq.push(Ast::Char(c)),
         };
     }
     // 閉じカッコが足りないエラー
@@ -146,10 +146,10 @@ pub fn parse(pattern: &str) -> Result<AST, ParseError> {
 
     // seq が残っている場合、seq_or に追加
     if !seq.is_empty() {
-        seq_or.push(AST::Seq(seq));
+        seq_or.push(Ast::Seq(seq));
     }
 
-    // 最後に seq_or を fold して、AST を生成
+    // 最後に seq_or を fold して、Ast を生成
     if let Some(ast) = fold_or(seq_or) {
         Ok(ast)
     } else {
@@ -162,16 +162,16 @@ pub fn parse(pattern: &str) -> Result<AST, ParseError> {
 #[cfg(test)]
 mod tests {
     use crate::{
-        engine::parser::{fold_or, parse, parse_escape, parse_qualifier, AST},
+        engine::parser::{fold_or, parse, parse_escape, parse_qualifier, Ast},
         error::ParseError,
     };
 
     #[test]
     fn test_parse_escape_success() {
-        let expect: AST = AST::Char('\\');
+        let expect: Ast = Ast::Char('\\');
 
         // テスト対象を実行
-        let actual: AST = parse_escape(0, '\\').unwrap();
+        let actual: Ast = parse_escape(0, '\\').unwrap();
         assert_eq!(actual, expect);
     }
 
@@ -186,47 +186,47 @@ mod tests {
 
     #[test]
     fn test_parse_qualifier_plus() {
-        let expect: AST = AST::Plus(Box::new(AST::Char('a')));
+        let expect: Ast = Ast::Plus(Box::new(Ast::Char('a')));
 
         // テスト対象を実行
-        let ast: AST = AST::Char('a');
-        let actual: AST = parse_qualifier('+', ast);
+        let ast: Ast = Ast::Char('a');
+        let actual: Ast = parse_qualifier('+', ast);
         assert_eq!(actual, expect);
     }
 
     #[test]
     fn test_parse_qualifier_star() {
-        let expect: AST = AST::Star(Box::new(AST::Char('a')));
+        let expect: Ast = Ast::Star(Box::new(Ast::Char('a')));
 
         // テスト対象を実行
-        let ast: AST = AST::Char('a');
-        let actual: AST = parse_qualifier('*', ast);
+        let ast: Ast = Ast::Char('a');
+        let actual: Ast = parse_qualifier('*', ast);
         assert_eq!(actual, expect);
     }
 
     #[test]
     fn test_parse_qualifier_question() {
-        let expect: AST = AST::Question(Box::new(AST::Char('a')));
+        let expect: Ast = Ast::Question(Box::new(Ast::Char('a')));
 
         // テスト対象を実行
-        let ast: AST = AST::Char('a');
-        let actual: AST = parse_qualifier('?', ast);
+        let ast: Ast = Ast::Char('a');
+        let actual: Ast = parse_qualifier('?', ast);
         assert_eq!(actual, expect);
     }
 
     #[test]
     fn test_fold_or_if_true() {
         // パターン "a|b|c" を想定し、データ準備
-        let seq: Vec<AST> = vec![AST::Char('a'), AST::Char('b'), AST::Char('c')];
+        let seq: Vec<Ast> = vec![Ast::Char('a'), Ast::Char('b'), Ast::Char('c')];
 
-        // a|b|c をパースした場合、以下のASTができる
-        // AST::Or(AST::Char('a'), AST::Or(AST::Char('b'), AST::Char('c')))
-        // 上記のASTを用意するため、データを定義
-        let left: AST = AST::Char('a');
-        let right: AST = AST::Or(Box::new(AST::Char('b')), Box::new(AST::Char('c')));
-        let expect: AST = AST::Or(Box::new(left), Box::new(right));
+        // a|b|c をパースした場合、以下のAstができる
+        // Ast::Or(Ast::Char('a'), Ast::Or(Ast::Char('b'), Ast::Char('c')))
+        // 上記のAstを用意するため、データを定義
+        let left: Ast = Ast::Char('a');
+        let right: Ast = Ast::Or(Box::new(Ast::Char('b')), Box::new(Ast::Char('c')));
+        let expect: Ast = Ast::Or(Box::new(left), Box::new(right));
 
-        let actual: AST = fold_or(seq).unwrap();
+        let actual: Ast = fold_or(seq).unwrap();
 
         assert_eq!(actual, expect);
     }
@@ -234,13 +234,13 @@ mod tests {
     #[test]
     fn test_fold_or_if_false() {
         // 長さ 1 の配列を準備
-        let mut seq: Vec<AST> = Vec::new();
-        seq.push(AST::Char('a'));
+        let mut seq: Vec<Ast> = Vec::new();
+        seq.push(Ast::Char('a'));
 
-        let expect: AST = AST::Char('a');
+        let expect: Ast = Ast::Char('a');
 
         // テスト対象を実行
-        let actual: AST = fold_or(seq).unwrap();
+        let actual: Ast = fold_or(seq).unwrap();
 
         assert_eq!(actual, expect);
     }
@@ -248,67 +248,67 @@ mod tests {
     #[test]
     fn test_parse_normal_string() {
         // ----- "abc" が入力されたケース -----
-        let expect: AST = AST::Seq(vec![AST::Char('a'), AST::Char('b'), AST::Char('c')]);
+        let expect: Ast = Ast::Seq(vec![Ast::Char('a'), Ast::Char('b'), Ast::Char('c')]);
         // テスト対象を実行
         let pattern: &str = "abc";
-        let actual: AST = parse(pattern).unwrap();
+        let actual: Ast = parse(pattern).unwrap();
         assert_eq!(actual, expect);
     }
 
     #[test]
     fn test_parse_contain_qualifier() {
         // ----- "abc+" が入力されたケース -----
-        let expect: AST = AST::Seq(vec![
-            AST::Char('a'),
-            AST::Char('b'),
-            AST::Plus(Box::new(AST::Char('c'))),
+        let expect: Ast = Ast::Seq(vec![
+            Ast::Char('a'),
+            Ast::Char('b'),
+            Ast::Plus(Box::new(Ast::Char('c'))),
         ]);
         // テスト対象を実行
         let pattern: &str = "abc+";
-        let actual: AST = parse(pattern).unwrap();
+        let actual: Ast = parse(pattern).unwrap();
         assert_eq!(actual, expect);
     }
 
     #[test]
     fn test_parse_contain_or() {
         // ----- "abc|def|ghi" が入力されたケース-----
-        let abc: AST = AST::Seq(vec![AST::Char('a'), AST::Char('b'), AST::Char('c')]);
-        let def: AST = AST::Seq(vec![AST::Char('d'), AST::Char('e'), AST::Char('f')]);
-        let ghi: AST = AST::Seq(vec![AST::Char('g'), AST::Char('h'), AST::Char('i')]);
+        let abc: Ast = Ast::Seq(vec![Ast::Char('a'), Ast::Char('b'), Ast::Char('c')]);
+        let def: Ast = Ast::Seq(vec![Ast::Char('d'), Ast::Char('e'), Ast::Char('f')]);
+        let ghi: Ast = Ast::Seq(vec![Ast::Char('g'), Ast::Char('h'), Ast::Char('i')]);
 
-        let expect: AST = AST::Or(
+        let expect: Ast = Ast::Or(
             Box::new(abc),
-            Box::new(AST::Or(Box::new(def), Box::new(ghi))),
+            Box::new(Ast::Or(Box::new(def), Box::new(ghi))),
         );
         // テスト対象を実行
         let pattern: &str = "abc|def|ghi";
-        let actual: AST = parse(pattern).unwrap();
+        let actual: Ast = parse(pattern).unwrap();
         assert_eq!(actual, expect);
     }
 
     #[test]
     fn test_parse_contain_paran() {
         // ----- "abc(def|ghi)" が入力されたケース-----
-        let expect: AST = AST::Seq(vec![
-            AST::Char('a'),
-            AST::Char('b'),
-            AST::Char('c'),
-            AST::Or(
-                Box::new(AST::Seq(vec![
-                    AST::Char('d'),
-                    AST::Char('e'),
-                    AST::Char('f'),
+        let expect: Ast = Ast::Seq(vec![
+            Ast::Char('a'),
+            Ast::Char('b'),
+            Ast::Char('c'),
+            Ast::Or(
+                Box::new(Ast::Seq(vec![
+                    Ast::Char('d'),
+                    Ast::Char('e'),
+                    Ast::Char('f'),
                 ])),
-                Box::new(AST::Seq(vec![
-                    AST::Char('g'),
-                    AST::Char('h'),
-                    AST::Char('i'),
+                Box::new(Ast::Seq(vec![
+                    Ast::Char('g'),
+                    Ast::Char('h'),
+                    Ast::Char('i'),
                 ])),
             ),
         ]);
         // テスト対象を実行
         let pattern: &str = "abc(def|ghi)";
-        let actual: AST = parse(pattern).unwrap();
+        let actual: Ast = parse(pattern).unwrap();
 
         assert_eq!(actual, expect);
     }
@@ -316,10 +316,10 @@ mod tests {
     #[test]
     fn test_parse_contain_period() {
         // ----- "a.c" が入力されたケース-----
-        let expect: AST = AST::Seq(vec![AST::Char('a'), AST::AnyChar, AST::Char('c')]);
+        let expect: Ast = Ast::Seq(vec![Ast::Char('a'), Ast::AnyChar, Ast::Char('c')]);
         // テスト対象を実行
         let pattern: &str = "a.c";
-        let actual: AST = parse(pattern).unwrap();
+        let actual: Ast = parse(pattern).unwrap();
 
         assert_eq!(actual, expect);
     }
@@ -327,10 +327,10 @@ mod tests {
     #[test]
     fn test_parse_contain_escape() {
         // ----- "a\*b" が入力されたケース -----
-        let expect: AST = AST::Seq(vec![AST::Char('a'), AST::Char('*'), AST::Char('b')]);
+        let expect: Ast = Ast::Seq(vec![Ast::Char('a'), Ast::Char('*'), Ast::Char('b')]);
         // テスト対象を実行
         let pattern: &str = "a\\*b";
-        let actual: AST = parse(pattern).unwrap();
+        let actual: Ast = parse(pattern).unwrap();
         assert_eq!(actual, expect);
     }
 
