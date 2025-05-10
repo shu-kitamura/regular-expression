@@ -498,7 +498,7 @@ mod tests {
 
     #[test]
     fn test_gen_question_success() {
-        // a+ が入力されたケース
+        // a? が入力されたケース
         let expect: Vec<Instruction> = vec![
             Instruction::Split(1, 2),
             Instruction::Char(Char::Literal('a')),
