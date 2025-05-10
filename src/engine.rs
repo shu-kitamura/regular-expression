@@ -69,7 +69,7 @@ pub fn match_line(
     // パターンが ^ で始まるかどうか。
     // 始まる場合、行頭からのマッチのみ実行する。始まらない場合、行頭以外のマッチも実行する。
     // どちらか判定するために使う。
-    let is_caret: bool = is_beginning_caret(&pattern);
+    let is_caret: bool = pattern.starts_with('^');
     if is_caret {
         // パターンが ^ で始まる場合、^ を取り除く。
         // Ast に ^ が含まれないようにするための処理。
@@ -78,7 +78,7 @@ pub fn match_line(
 
     // パターンが $ で終わるかどうか。
     // 始まる場合、行末かどうかチェックをマッチに含める。
-    let is_dollar: bool = is_end_dollar(&pattern);
+    let is_dollar: bool = pattern.ends_with('$');
     if is_dollar {
         // パターンが $ で終わる場合、$ を取り除く。
         // Ast に $ が含まれないようにするための処理。
@@ -118,36 +118,17 @@ pub fn match_line(
         }
     }
 
-    Ok(invert_match_result(is_match, is_invert_match))
+    Ok(is_match ^ is_invert_match)
 }
 
-/// パターンが ^ で始まるかどうかを返す関数
-fn is_beginning_caret(pattern: &str) -> bool {
-    pattern.starts_with('^')
-}
-
-/// パターンが $ で終わるかどうかを返す関数
-fn is_end_dollar(pattern: &str) -> bool {
-    pattern.ends_with('$')
-}
-
-/// マッチ結果を反転させる関数  
-/// -v オプションが指定された場合、反転させる必要がある。  
-fn invert_match_result(match_result: bool, is_invert: bool) -> bool {
-    if is_invert {
-        !match_result
-    } else {
-        match_result
-    }
-}
+// ----- テストコード・試し -----
 
 #[cfg(test)]
 mod tests {
     use crate::{
         engine::{
             instruction::{Char, Instruction},
-            invert_match_result, is_beginning_caret, is_end_dollar, match_line, match_string,
-            safe_add,
+            match_line, match_string, safe_add,
         },
         error::{EvalError, ParseError, RegexError},
     };
@@ -268,48 +249,6 @@ mod tests {
     fn test_match_line_parse_error() {
         let actual = match_line("ab(c|d".to_string(), "a".to_string(), false, false);
         assert_eq!(actual, Err(RegexError::Parse(ParseError::NoRightParen)));
-    }
-
-    #[test]
-    fn test_is_beginning_caret_true() {
-        let actual: bool = is_beginning_caret("^pattern");
-        assert_eq!(actual, true);
-    }
-
-    #[test]
-    fn test_is_beginning_caret_false() {
-        let actual: bool = is_beginning_caret("pattern");
-        assert_eq!(actual, false);
-    }
-
-    #[test]
-    fn test_is_end_dollar_true() {
-        let actual: bool = is_end_dollar("pattern$");
-        assert_eq!(actual, true);
-    }
-
-    #[test]
-    fn test_is_end_dollar_false() {
-        let actual: bool = is_end_dollar("pattern");
-        assert_eq!(actual, false);
-    }
-
-    #[test]
-    fn test_invert_match_result_true() {
-        let actual: bool = invert_match_result(true, false);
-        assert_eq!(actual, true);
-
-        let actual: bool = invert_match_result(false, true);
-        assert_eq!(actual, true);
-    }
-
-    #[test]
-    fn test_invert_match_result_false() {
-        let actual: bool = invert_match_result(true, true);
-        assert_eq!(actual, false);
-
-        let actual: bool = invert_match_result(false, false);
-        assert_eq!(actual, false);
     }
 
     #[test]
