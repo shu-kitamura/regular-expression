@@ -3,8 +3,6 @@ use regular_expression::pattern_match;
 use std::{
     error::Error,
     fmt::{self, Display},
-};
-use std::{
     fs::File,
     io::{stdin, BufRead, BufReader, Stdin},
 };
