@@ -130,7 +130,7 @@ fn main() {
 
     // マッチした行数を数えるための変数
     // -c オプションが指定されたときに使う
-    let mut matching_count: i32 = 0;
+    let mut matching_count: usize = 0;
 
     if files.is_empty() {
         let stdin: Stdin = stdin();
@@ -193,8 +193,8 @@ fn match_file<T: BufRead>(
     is_filename: bool,
     is_count: bool,
     is_line_number: bool,
-) -> Option<i32> {
-    let mut matching_count: i32 = 0;
+) -> Option<usize> {
+    let mut matching_count: usize = 0;
     for (i, result) in buf_reader.lines().enumerate() {
         let line = match result {
             Ok(line) => line,
