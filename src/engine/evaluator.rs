@@ -39,7 +39,7 @@ fn eval_depth(
     chars: &[char],
     mut p_counter: usize,
     mut char_index: usize,
-    is_end_doller: bool,
+    is_end_dollar: bool,
 ) -> Result<bool, EvalError> {
     loop {
         // Instruction を取得
@@ -58,7 +58,7 @@ fn eval_depth(
                 };
             }
             Instruction::Match => {
-                if is_end_doller {
+                if is_end_dollar {
                     return Ok(chars.len() == char_index);
                 } else {
                     return Ok(true);
@@ -70,8 +70,8 @@ fn eval_depth(
                     return Ok(false);
                 }
                 return Ok(
-                    eval_depth(instructions, chars, *addr1, char_index, is_end_doller)?
-                        || eval_depth(instructions, chars, *addr2, char_index, is_end_doller)?,
+                    eval_depth(instructions, chars, *addr1, char_index, is_end_dollar)?
+                        || eval_depth(instructions, chars, *addr2, char_index, is_end_dollar)?,
                 );
             }
         }
@@ -79,8 +79,8 @@ fn eval_depth(
 }
 
 /// 命令列の評価を行う関数
-pub fn eval(inst: &[Instruction], chars: &[char], is_end_doller: bool) -> Result<bool, EvalError> {
-    eval_depth(inst, chars, 0, 0, is_end_doller)
+pub fn eval(inst: &[Instruction], chars: &[char], is_end_dollar: bool) -> Result<bool, EvalError> {
+    eval_depth(inst, chars, 0, 0, is_end_dollar)
 }
 
 // ----- テストコード -----
@@ -180,7 +180,7 @@ mod tests {
     }
 
     #[test]
-    fn test_eval_depth_is_end_doller() {
+    fn test_eval_depth_is_end_dollar() {
         // "ab(c|d)" が入力された Instraction
         let insts: Vec<Instruction> = vec![
             Instruction::Char(Char::Literal('a')),
