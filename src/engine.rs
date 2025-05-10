@@ -79,7 +79,7 @@ pub fn match_line(
     if is_caret {
         // パターンが ^ で始まる場合、^ を取り除く。
         // AST に ^ が含まれないようにするための処理。
-        pattern = pattern.get(1..).unwrap().to_string();
+        pattern = pattern.strip_prefix("^").unwrap().to_string();
     }
 
     // パターンが $ で終わるかどうか。
@@ -88,7 +88,7 @@ pub fn match_line(
     if is_dollar {
         // パターンが $ で終わる場合、$ を取り除く。
         // AST に $ が含まれないようにするための処理。
-        pattern = pattern.get(..pattern.len() - 1).unwrap().to_string();
+        pattern = pattern.strip_suffix("$").unwrap().to_string();
     }
 
     // -i が指定された場合の処理
