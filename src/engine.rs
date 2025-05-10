@@ -31,13 +31,11 @@ where
     T: SafeAdd,
     F: Fn() -> E,
 {
-    {
-        if let Some(n) = dst.safe_add(src) {
-            *dst = n;
-            Ok(())
-        } else {
-            Err(f())
-        }
+    if let Some(n) = dst.safe_add(src) {
+        *dst = n;
+        Ok(())
+    } else {
+        Err(f())
     }
 }
 
