@@ -17,13 +17,13 @@ mod error;
 /// ※ is_invert_match に true が指定されている場合は マッチング結果が反対になる。  
 pub fn pattern_match(
     pattern: &str,
-    string: &str,
+    line: &str,
     ignore_case: bool,
     invert_match: bool,
 ) -> Result<bool, error::RegexError> {
     engine::match_line(
         pattern.to_string(),
-        string.to_string(),
+        line.to_string(),
         ignore_case,
         invert_match,
     )
