@@ -32,3 +32,26 @@ impl Display for Instruction {
         }
     }
 }
+
+
+// ----- テストコード・試し -----
+
+#[cfg(test)]
+mod tests {
+    use crate::engine::instruction::{Char, Instruction};
+
+    #[test]
+    fn test_instruction_fmt() {
+        let inst_literal = Instruction::Char(Char::Literal('a'));
+        let inst_any = Instruction::Char(Char::Any);
+        let inst_match = Instruction::Match;
+        let inst_jump = Instruction::Jump(10);
+        let inst_split = Instruction::Split(20, 30);
+
+        assert_eq!(format!("{}", inst_literal), "char a");
+        assert_eq!(format!("{}", inst_any), "char any");
+        assert_eq!(format!("{}", inst_match), "match");
+        assert_eq!(format!("{}", inst_jump), "jump 0010");
+        assert_eq!(format!("{}", inst_split), "split 0020, 0030");
+    }
+}
