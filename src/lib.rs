@@ -18,13 +18,13 @@ mod error;
 pub fn pattern_match(
     pattern: &str,
     line: &str,
-    ignore_case: bool,
-    invert_match: bool,
+    is_ignore_case: bool,
+    is_invert_match: bool,
 ) -> Result<bool, error::RegexError> {
     engine::match_line(
         pattern.to_string(),
         line.to_string(),
-        ignore_case,
-        invert_match,
+        is_ignore_case,
+        is_invert_match,
     )
 }
