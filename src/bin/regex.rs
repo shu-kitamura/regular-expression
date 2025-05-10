@@ -1,10 +1,10 @@
 use clap::{ArgAction, Parser};
-use thiserror::Error;
 use regular_expression::pattern_match;
 use std::{
     fs::File,
     io::{stdin, BufRead, BufReader, Stdin},
 };
+use thiserror::Error;
 
 // 入力ファイルが stdin の場合、ファイル名を (standard input) とする。
 // grep コマンドでパイプ使用時にファイル名を表示したら、(standard input)なるのでそれに合わせている。
