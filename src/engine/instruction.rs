@@ -33,7 +33,6 @@ impl Display for Instruction {
     }
 }
 
-
 // ----- テストコード・試し -----
 
 #[cfg(test)]
