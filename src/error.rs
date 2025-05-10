@@ -15,7 +15,7 @@ pub enum ParseError {
     InvalidRightParen(usize),
     #[error("ParseError: no previous expression : position = {0}")]
     NoPrev(usize),
-    #[error("ParseError: No right parenthesis")]
+    #[error("ParseError: no right parenthesis")]
     NoRightParen,
     #[error("ParseError: empty expression")]
     Empty,
