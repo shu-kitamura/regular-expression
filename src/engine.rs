@@ -225,7 +225,7 @@ mod tests {
     }
 
     #[test]
-    fn test_match_line_biginning_caret() {
+    fn test_match_line_beginning_caret() {
         // a で始まり、bの0回以上の繰り返し、 c があるので、マッチすることを期待。
         // (true を期待するケース)
         let actual1: bool = match_line(
