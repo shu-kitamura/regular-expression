@@ -1,8 +1,7 @@
 use clap::{ArgAction, Parser};
+use thiserror::Error;
 use regular_expression::pattern_match;
 use std::{
-    error::Error,
-    fmt::{self, Display},
     fs::File,
     io::{stdin, BufRead, BufReader, Stdin},
 };
@@ -84,26 +83,13 @@ impl Args {
 }
 
 /// コマンドラインの指定に不正があった場合に出力するエラーの型
-#[derive(Debug)]
+#[derive(Debug, Error)]
 pub enum CommandLineError {
+    #[error("CommandLineError : no pattern specified.")]
     NoPattern,
+    #[error("CommandLineError : -h, -H options are specified at the same time.")]
     DuplicateFilenameOption,
 }
-
-/// CommandLineErrorを表示するため、Displayトレイトを実装
-impl Display for CommandLineError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            CommandLineError::NoPattern => write!(f, "CommandLineError : No pattern specified."),
-            CommandLineError::DuplicateFilenameOption => write!(
-                f,
-                "CommandLineError : -h, -H options are specified at the same time."
-            ),
-        }
-    }
-}
-
-impl Error for CommandLineError {}
 
 fn main() {
     let mut args: Args = Args::parse();
