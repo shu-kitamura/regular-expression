@@ -130,7 +130,7 @@ impl Compiler {
         Ok(())
     }
 
-    /// Ast::AnyChar 型に対応する Instruction を生成し、instractions に push する
+    /// Ast::AnyChar 型に対応する Instruction を生成し、instructions に push する
     fn gen_anychar(&mut self) -> Result<(), CompileError> {
         let inst: Instruction = Instruction::Char(Char::Any);
         self.increment_p_counter()?;

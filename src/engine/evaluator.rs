@@ -140,7 +140,7 @@ mod tests {
 
     #[test]
     fn test_eval_depth_true() {
-        // "ab(c|d)" が入力された Instraction
+        // "ab(c|d)" が入力された Instruction
         let insts: Vec<Instruction> = vec![
             Instruction::Char(Char::Literal('a')),
             Instruction::Char(Char::Literal('b')),
@@ -165,7 +165,7 @@ mod tests {
 
     #[test]
     fn test_eval_depth_false() {
-        // "ab(c|d)" が入力された Instraction
+        // "ab(c|d)" が入力された Instruction
         let insts: Vec<Instruction> = vec![
             Instruction::Char(Char::Literal('a')),
             Instruction::Char(Char::Literal('b')),
@@ -185,7 +185,7 @@ mod tests {
 
     #[test]
     fn test_eval_depth_is_end_dollar() {
-        // "ab(c|d)" が入力された Instraction
+        // "ab(c|d)" が入力された Instruction
         let insts: Vec<Instruction> = vec![
             Instruction::Char(Char::Literal('a')),
             Instruction::Char(Char::Literal('b')),
