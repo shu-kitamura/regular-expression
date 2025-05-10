@@ -9,6 +9,10 @@ use std::{
     io::{stdin, BufRead, BufReader, Stdin},
 };
 
+// 入力ファイルが stdin の場合、ファイル名を (standard input) とする。
+// grep コマンドでパイプ使用時にファイル名を表示したら、(standard input)なるのでそれに合わせている。
+const STDIN_FILENAME: &str = "(standard input)";
+
 #[derive(Debug, Parser)]
 #[command(version)]
 #[clap(disable_version_flag = true, disable_help_flag = true)]
@@ -121,35 +125,20 @@ fn main() {
         }
     };
 
-    // 引数に指定したファイルを取得
-    let files: &Vec<String> = &args.files;
-
-    let is_print_filename: bool =
-        is_print_filename(files.len(), args.no_filename, args.with_filename);
-
     // マッチした行数を数えるための変数
     // -c オプションが指定されたときに使う
     let mut matching_count: usize = 0;
 
-    if files.is_empty() {
+    if args.files.is_empty() {
         let stdin: Stdin = stdin();
         let mut buf_reader: BufReader<Stdin> = BufReader::new(stdin);
 
         // 標準入力を1行ずつ read し、マッチングを実行する
-        if let Some(c) = match_file(
-            &mut buf_reader,
-            "(standard input)", // grep コマンドでパイプ使用時にファイル名を表示したら、(standard input)なるのでそれに合わせる。
-            &patterns,
-            args.ignore_case,
-            args.invert_match,
-            is_print_filename,
-            args.count,
-            args.line_number,
-        ) {
+        if let Some(c) = match_file(&mut buf_reader, STDIN_FILENAME, &patterns, &args) {
             matching_count += c
         }
     } else {
-        for file in files {
+        for file in &args.files {
             // ファイルをオープンする
             let mut buf_reader: BufReader<File> = match File::open(file) {
                 Ok(reader) => BufReader::new(reader),
@@ -160,16 +149,7 @@ fn main() {
             };
 
             // ファイルを1行ずつ read し、マッチングを実行する
-            if let Some(c) = match_file(
-                &mut buf_reader,
-                file,
-                &patterns,
-                args.ignore_case,
-                args.invert_match,
-                is_print_filename,
-                args.count,
-                args.line_number,
-            ) {
+            if let Some(c) = match_file(&mut buf_reader, file, &patterns, &args) {
                 matching_count += c
             };
         }
@@ -185,12 +165,14 @@ fn match_file<T: BufRead>(
     buf_reader: T,
     file: &str,
     patterns: &Vec<String>,
-    ignore_case: bool,
-    invert_match: bool,
-    is_filename: bool,
-    is_count: bool,
-    is_line_number: bool,
+    args: &Args,
 ) -> Option<usize> {
+    let ignore_case = args.ignore_case;
+    let invert_match = args.invert_match;
+    let is_filename = is_print_filename(args.files.len(), args.no_filename, args.with_filename);
+    let is_count = args.count;
+    let is_line_number = args.line_number;
+
     let mut matching_count: usize = 0;
     for (i, result) in buf_reader.lines().enumerate() {
         let line = match result {
