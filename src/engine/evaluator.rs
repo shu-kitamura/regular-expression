@@ -1,31 +1,31 @@
 //! Instruction と char配列を受け取って評価する
 
 use crate::{
-    error::EvalError,
     engine::{
-        instruction::{Instruction, Char},
-        safe_add
-    }
+        instruction::{Char, Instruction},
+        safe_add,
+    },
+    error::EvalError,
 };
 
 /// char と Instruction を評価する
-fn eval_char(inst: &Char, chars: &[char], index: usize)-> bool {
+fn eval_char(inst: &Char, chars: &[char], index: usize) -> bool {
     let inst_char = match inst {
         Char::Literal(c) => c,
-        Char::Any => return true
+        Char::Any => return true,
     };
 
     match chars.get(index) {
         Some(c) => c == inst_char,
-        None => false
+        None => false,
     }
 }
 
 /// プログラムカウンタとchar配列のインデックスをインクリメントする
 fn increment_pc_and_index(pc: &mut usize, index: &mut usize) -> Result<(), EvalError> {
     match safe_add(pc, &1, || EvalError::PCOverFlow) {
-        Ok(()) => {},
-        Err(e) => return Err(e)
+        Ok(()) => {}
+        Err(e) => return Err(e),
     };
     match safe_add(index, &1, || EvalError::CharIndexOverFlow) {
         Ok(()) => Ok(()),
@@ -39,13 +39,13 @@ fn eval_depth(
     chars: &[char],
     mut p_counter: usize,
     mut char_index: usize,
-    is_end_doller: bool
+    is_end_doller: bool,
 ) -> Result<bool, EvalError> {
     loop {
         // Instruction を取得
         let instruction: &Instruction = match instructions.get(p_counter) {
             Some(inst) => inst,
-            None => return Err(EvalError::InvalidPC)
+            None => return Err(EvalError::InvalidPC),
         };
 
         // Instruction の型に応じて、評価を実行。
@@ -54,30 +54,32 @@ fn eval_depth(
                 if eval_char(inst_char, chars, char_index) {
                     increment_pc_and_index(&mut p_counter, &mut char_index)?;
                 } else {
-                    return Ok(false)
+                    return Ok(false);
                 };
             }
             Instruction::Match => {
                 if is_end_doller {
-                    return Ok(chars.len() == char_index)
+                    return Ok(chars.len() == char_index);
                 } else {
-                    return Ok(true)
+                    return Ok(true);
                 }
             }
             Instruction::Jump(addr) => p_counter = *addr,
             Instruction::Split(addr1, addr2) => {
                 if chars.len() <= char_index {
-                    return Ok(false)
+                    return Ok(false);
                 }
-                return Ok(eval_depth(instructions, chars, *addr1, char_index, is_end_doller)?
-                    || eval_depth(instructions, chars, *addr2, char_index, is_end_doller)?)
+                return Ok(
+                    eval_depth(instructions, chars, *addr1, char_index, is_end_doller)?
+                        || eval_depth(instructions, chars, *addr2, char_index, is_end_doller)?,
+                );
             }
         }
     }
 }
 
 /// 命令列の評価を行う関数
-pub fn eval(inst: &[Instruction], chars:&[char], is_end_doller: bool) -> Result<bool, EvalError> {
+pub fn eval(inst: &[Instruction], chars: &[char], is_end_doller: bool) -> Result<bool, EvalError> {
     eval_depth(inst, chars, 0, 0, is_end_doller)
 }
 
@@ -87,12 +89,10 @@ pub fn eval(inst: &[Instruction], chars:&[char], is_end_doller: bool) -> Result<
 mod tests {
     use crate::{
         engine::{
-            instruction::{Instruction, Char},
-            evaluator::{
-                eval_char, increment_pc_and_index, eval_depth
-            }
+            evaluator::{eval_char, eval_depth, increment_pc_and_index},
+            instruction::{Char, Instruction},
         },
-        error::EvalError
+        error::EvalError,
     };
 
     #[test]
@@ -116,7 +116,7 @@ mod tests {
         let index: &mut usize = &mut 10;
         let _ = increment_pc_and_index(pc, index);
 
-        assert_eq!(pc,&mut 11);
+        assert_eq!(pc, &mut 11);
         assert_eq!(index, &mut 11);
     }
 
@@ -144,17 +144,17 @@ mod tests {
             Instruction::Char(Char::Literal('c')),
             Instruction::Jump(6),
             Instruction::Char(Char::Literal('d')),
-            Instruction::Match
+            Instruction::Match,
         ];
 
         // "abc" とマッチするケース
-        let chars1:Vec<char> = vec!['a', 'b', 'c'];
-        
+        let chars1: Vec<char> = vec!['a', 'b', 'c'];
+
         let actual1 = eval_depth(&insts, &chars1, 0, 0, false).unwrap();
         assert_eq!(actual1, true);
 
         // "abd"とマッチするケース
-        let chars2:Vec<char> = vec!['a', 'b', 'c'];
+        let chars2: Vec<char> = vec!['a', 'b', 'c'];
         let actual2 = eval_depth(&insts, &chars2, 0, 0, false).unwrap();
         assert_eq!(actual2, true);
     }
@@ -169,11 +169,11 @@ mod tests {
             Instruction::Char(Char::Literal('c')),
             Instruction::Jump(6),
             Instruction::Char(Char::Literal('d')),
-            Instruction::Match
+            Instruction::Match,
         ];
 
         // "abx" とマッチするケース
-        let chars:Vec<char> = vec!['a', 'b', 'X'];
+        let chars: Vec<char> = vec!['a', 'b', 'X'];
 
         let actual = eval_depth(&insts, &chars, 0, 0, false).unwrap();
         assert_eq!(actual, false);
@@ -189,26 +189,29 @@ mod tests {
             Instruction::Char(Char::Literal('c')),
             Instruction::Jump(6),
             Instruction::Char(Char::Literal('d')),
-            Instruction::Match
+            Instruction::Match,
         ];
 
         // "xxxabc" とマッチするケース (true になる)
-        let chars1:Vec<char> = vec!['a', 'b', 'c'];
-        
+        let chars1: Vec<char> = vec!['a', 'b', 'c'];
+
         let actual1: bool = eval_depth(&insts, &chars1, 0, 0, true).unwrap();
         assert_eq!(actual1, true);
 
         // "abcxxx"とマッチするケース (false になる)
-        let chars2:Vec<char> = vec!['a', 'b', 'c', 'x', 'x', 'x'];
+        let chars2: Vec<char> = vec!['a', 'b', 'c', 'x', 'x', 'x'];
         let actual2: bool = eval_depth(&insts, &chars2, 0, 0, true).unwrap();
         assert_eq!(actual2, false);
     }
 
-
     #[test]
     fn test_eval_depth_invalidpc() {
-        let insts: Vec<Instruction> = vec![Instruction::Char(Char::Literal('a')), Instruction::Char(Char::Literal('b')), Instruction::Match];
-        let chars:Vec<char> =vec!['a', 'b', 'c', 'd'];
+        let insts: Vec<Instruction> = vec![
+            Instruction::Char(Char::Literal('a')),
+            Instruction::Char(Char::Literal('b')),
+            Instruction::Match,
+        ];
+        let chars: Vec<char> = vec!['a', 'b', 'c', 'd'];
 
         let actual = eval_depth(&insts, &chars, usize::MAX, 0, false);
         assert_eq!(actual, Err(EvalError::InvalidPC));

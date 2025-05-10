@@ -1,7 +1,7 @@
 //! AST を命令列(Instruction)にコンパイルするための型・関数  
 //! "ab(c|b)" が入力された場合、以下にコンパイルする
 //! (左の数字はプログラムカウンタ)
-//! 
+//!
 //! ```text
 //! 0 : Char(a)
 //! 1 : Char(b)
@@ -13,19 +13,19 @@
 //! ```
 
 use crate::{
-    error::CompileError,
     engine::{
-        safe_add,
-        instruction::{Instruction, Char},
+        instruction::{Char, Instruction},
         parser::AST,
-    }
+        safe_add,
+    },
+    error::CompileError,
 };
 
 /// コンパイラの型
 #[derive(Default, Debug)]
 struct Compiler {
     p_counter: usize,
-    instructions: Vec<Instruction>
+    instructions: Vec<Instruction>,
 }
 
 impl Compiler {
@@ -35,7 +35,7 @@ impl Compiler {
     }
 
     /// ヘルパー関数: 第二引数が仮値の Split 命令を命令列に挿入する。
-    /// 
+    ///
     /// 命令列に split を挿入する際、第二引数に指定するコードが、挿入時点ではまだ値がわからない。  
     /// そのため、ここでは仮の数値(0)を入れて、数値は後で更新する。
     ///
@@ -47,7 +47,8 @@ impl Compiler {
     fn insert_split_placeholder(&mut self) -> Result<usize, CompileError> {
         let placeholder_index: usize = self.p_counter;
         self.increment_p_counter()?;
-        self.instructions.push(Instruction::Split(self.p_counter, 0));
+        self.instructions
+            .push(Instruction::Split(self.p_counter, 0));
         Ok(placeholder_index)
     }
 
@@ -56,17 +57,21 @@ impl Compiler {
     ///
     /// - Split 命令の場合、右側アドレス (second argument) を更新する。
     /// - Jump 命令の場合、ジャンプ先アドレスを更新する。
-    fn update_instruction_address(&mut self, index: usize, err: CompileError) -> Result<(), CompileError> {
+    fn update_instruction_address(
+        &mut self,
+        index: usize,
+        err: CompileError,
+    ) -> Result<(), CompileError> {
         match self.instructions.get_mut(index) {
             Some(Instruction::Split(_, right)) => {
                 *right = self.p_counter;
                 Ok(())
-            },
+            }
             Some(Instruction::Jump(addr)) => {
                 *addr = self.p_counter;
                 Ok(())
-            },
-            _ => Err(err)
+            }
+            _ => Err(err),
         }
     }
 
@@ -78,37 +83,39 @@ impl Compiler {
             AST::Or(e1, e2) => self.gen_or(e1, e2),
             AST::Plus(ast) => match &**ast {
                 AST::Star(child_ast) => self.gen_expr(&child_ast),
-                AST::Seq(child_vec) if child_vec.len() == 1 =>
+                AST::Seq(child_vec) if child_vec.len() == 1 => {
                     if let Some(child_ast @ AST::Star(_)) = child_vec.get(0) {
                         self.gen_expr(&child_ast)
                     } else {
                         self.gen_expr(ast)
                     }
-                AST::Or(child_ast1, child_ast2 ) => {
-                    match self.gen_expr(&child_ast1){
-                        Ok(()) => {},
+                }
+                AST::Or(child_ast1, child_ast2) => {
+                    match self.gen_expr(&child_ast1) {
+                        Ok(()) => {}
                         Err(e) => return Err(e),
                     };
                     self.gen_expr(&child_ast2)
                 }
-                e => self.gen_plus(e)
+                e => self.gen_plus(e),
             },
             AST::Star(ast) => match &**ast {
                 AST::Star(child_ast) => self.gen_expr(&child_ast),
-                AST::Seq(child_vec) if child_vec.len() == 1 =>
+                AST::Seq(child_vec) if child_vec.len() == 1 => {
                     if let Some(child_ast @ AST::Star(_)) = child_vec.get(0) {
                         self.gen_expr(&child_ast)
                     } else {
                         self.gen_expr(ast)
                     }
-                AST::Or(child_ast1, child_ast2 ) => {
-                    match self.gen_expr(&child_ast1){
-                        Ok(()) => {},
+                }
+                AST::Or(child_ast1, child_ast2) => {
+                    match self.gen_expr(&child_ast1) {
+                        Ok(()) => {}
                         Err(e) => return Err(e),
                     };
                     self.gen_expr(&child_ast2)
-                }    
-                e => self.gen_star(e)
+                }
+                e => self.gen_star(e),
             },
             AST::Question(ast) => self.gen_question(ast),
             AST::Seq(v) => self.gen_seq(v),
@@ -133,11 +140,11 @@ impl Compiler {
 
     /// AST::Star 型に対応する Instruction を生成し、instructions に push する  
     /// a* 入力された場合、以下のような Instruction を生成する  
-    /// 
+    ///
     /// ```text
     /// 0 : split 1, 3
     /// 1 : Char(a)
-    /// 2 : jump 0 
+    /// 2 : jump 0
     /// 3 : ... 続き
     /// ```
     fn gen_star(&mut self, ast: &AST) -> Result<(), CompileError> {
@@ -150,14 +157,14 @@ impl Compiler {
         // カウンタをインクリメントし、Jump を挿入する
         self.increment_p_counter()?;
         self.instructions.push(Instruction::Jump(split_count));
-        
+
         // Split の第二引数を更新する
         self.update_instruction_address(split_count, CompileError::FailStar)
     }
 
     /// AST::Plus 型に対応する Instruction を生成し、instructions に push する  
     /// a+ 入力された場合、以下のような Instruction を生成する  
-    /// 
+    ///
     /// ```text
     /// 0 : Char(a)
     /// 1 : split 0, 2
@@ -170,13 +177,14 @@ impl Compiler {
 
         // カウンタをインクリメントし Split を挿入する
         self.increment_p_counter()?;
-        self.instructions.push(Instruction::Split(left, self.p_counter));
+        self.instructions
+            .push(Instruction::Split(left, self.p_counter));
         Ok(())
     }
 
     /// AST::Question 型に対応する Instruction を生成し、instructions に push する  
     /// a? 入力された場合、以下のような Instruction を生成する  
-    /// 
+    ///
     /// ```text
     /// 0 : split 1, 2
     /// 1 : Char(a)
@@ -184,22 +192,21 @@ impl Compiler {
     /// ```
     fn gen_question(&mut self, ast: &AST) -> Result<(), CompileError> {
         // split を挿入する。後で更新するため、格納した index を split_count に保持する。
-        let split_count: usize = self.insert_split_placeholder()?;        
+        let split_count: usize = self.insert_split_placeholder()?;
         // AST を再帰的に処理する。
         self.gen_expr(ast)?;
 
         // Split の第二引数を更新する。
         self.update_instruction_address(split_count, CompileError::FailQuestion)
-
     }
 
     /// AST::Or 型に対応する Instruction を生成し、instructions に push する  
     /// a|b が入力された場合、以下のような Instruction を生成する。  
-    /// 
+    ///
     /// ```text
     /// 0 : split 1, 3
     /// 1 : Char(a)
-    /// 2 : jump 4 
+    /// 2 : jump 4
     /// 3 : Char(b)
     /// 4 : ... 続き
     /// ```
@@ -226,7 +233,7 @@ impl Compiler {
     }
 
     /// AST::Seq 型に対応する Instruction を生成し、instructions に push する
-    fn gen_seq(&mut self, vec:&Vec<AST>) -> Result<(), CompileError> {
+    fn gen_seq(&mut self, vec: &Vec<AST>) -> Result<(), CompileError> {
         for ast in vec {
             self.gen_expr(ast)?;
         }
@@ -260,11 +267,11 @@ mod tests {
 
     use crate::{
         engine::{
+            compiler::{compile, Compiler},
+            instruction::{Char, Instruction},
             parser::AST,
-            instruction::{Instruction, Char},
-            compiler::{Compiler, compile}
         },
-        error::CompileError
+        error::CompileError,
     };
 
     #[test]
@@ -272,12 +279,12 @@ mod tests {
         let count: usize = 10;
         let mut compiler: Compiler = Compiler {
             p_counter: count,
-            instructions : Vec::new()
+            instructions: Vec::new(),
         };
 
         compiler.increment_p_counter().unwrap();
         let actual: usize = compiler.p_counter;
-        assert_eq!(actual, count+1);
+        assert_eq!(actual, count + 1);
     }
 
     #[test]
@@ -285,7 +292,7 @@ mod tests {
         let count: usize = usize::MAX;
         let mut compiler: Compiler = Compiler {
             p_counter: count,
-            instructions : Vec::new()
+            instructions: Vec::new(),
         };
 
         let actual = compiler.increment_p_counter();
@@ -315,7 +322,7 @@ mod tests {
             Instruction::Split(left, right) => {
                 assert_eq!(*left, 1);
                 assert_eq!(*right, 0);
-            },
+            }
             _ => panic!("インデックス 0 には Jump 命令があるはず"),
         }
     }
@@ -342,8 +349,8 @@ mod tests {
             p_counter: 42,
             instructions: vec![
                 Instruction::Split(10, 0), // 左側は任意の値、右側は仮値 0
-                Instruction::Jump(0)       // 仮値 0
-            ], 
+                Instruction::Jump(0),      // 仮値 0
+            ],
         };
 
         // インデックス 0 の Split 命令の右側アドレスを更新する
@@ -381,10 +388,7 @@ mod tests {
     fn test_update_instruction_address_failure_invalid_instruction() {
         let mut compiler = Compiler {
             p_counter: 99,
-            instructions: vec![
-                Instruction::Char(Char::Literal('a')),
-                Instruction::Match
-            ],
+            instructions: vec![Instruction::Char(Char::Literal('a')), Instruction::Match],
         };
 
         // インデックス 0 の命令は Char なのでエラーになる
@@ -403,7 +407,7 @@ mod tests {
         let expect: Vec<Instruction> = vec![Instruction::Char(Char::Literal('a'))];
         let mut compiler: Compiler = Compiler {
             p_counter: 0,
-            instructions : Vec::new()
+            instructions: Vec::new(),
         };
 
         let _ = compiler.gen_char('a');
@@ -416,10 +420,11 @@ mod tests {
         let expect = Err(CompileError::PCOverFlow);
         let mut compiler: Compiler = Compiler {
             p_counter: usize::MAX,
-            instructions : Vec::new()
+            instructions: Vec::new(),
         };
 
-        let actual = compiler.gen_char('a');    assert_eq!(actual, expect);
+        let actual = compiler.gen_char('a');
+        assert_eq!(actual, expect);
     }
 
     #[test]
@@ -428,7 +433,7 @@ mod tests {
 
         let mut compiler: Compiler = Compiler {
             p_counter: 0,
-            instructions : Vec::new()
+            instructions: Vec::new(),
         };
         let _ = compiler.gen_anychar();
         assert_eq!(compiler.instructions, expect)
@@ -445,7 +450,7 @@ mod tests {
 
         let mut compiler: Compiler = Compiler {
             p_counter: 0,
-            instructions : Vec::new()
+            instructions: Vec::new(),
         };
 
         let ast: Box<AST> = Box::new(AST::Char('a'));
@@ -458,11 +463,11 @@ mod tests {
     #[test]
     fn test_gen_star_failure() {
         // a* が入力されたケース
-        let expect:Result<(), CompileError>  = Err(CompileError::FailStar);
+        let expect: Result<(), CompileError> = Err(CompileError::FailStar);
 
         let mut compiler: Compiler = Compiler {
             p_counter: 100,
-            instructions : Vec::new()
+            instructions: Vec::new(),
         };
 
         let ast: Box<AST> = Box::new(AST::Char('a'));
@@ -470,7 +475,6 @@ mod tests {
         let actual: Result<(), CompileError> = compiler.gen_star(&ast);
         assert_eq!(actual, expect);
     }
-
 
     #[test]
     fn test_gen_plus_success() {
@@ -482,7 +486,7 @@ mod tests {
 
         let mut compiler: Compiler = Compiler {
             p_counter: 0,
-            instructions : Vec::new()
+            instructions: Vec::new(),
         };
 
         let ast: Box<AST> = Box::new(AST::Char('a'));
@@ -502,7 +506,7 @@ mod tests {
 
         let mut compiler: Compiler = Compiler {
             p_counter: 0,
-            instructions : Vec::new()
+            instructions: Vec::new(),
         };
 
         let ast: Box<AST> = Box::new(AST::Char('a'));
@@ -514,18 +518,17 @@ mod tests {
 
     #[test]
     fn test_gen_question_failure() {
-        let expect:Result<(), CompileError>  = Err(CompileError::FailQuestion);
+        let expect: Result<(), CompileError> = Err(CompileError::FailQuestion);
 
         let mut compiler: Compiler = Compiler {
             p_counter: 100,
-            instructions : Vec::new()
+            instructions: Vec::new(),
         };
         let ast: Box<AST> = Box::new(AST::Char('a'));
 
         let actual: Result<(), CompileError> = compiler.gen_question(&ast);
         assert_eq!(actual, expect);
     }
-
 
     #[test]
     fn test_gen_or_success() {
@@ -539,9 +542,9 @@ mod tests {
 
         let mut compiler: Compiler = Compiler {
             p_counter: 0,
-            instructions : Vec::new()
+            instructions: Vec::new(),
         };
-    
+
         let e1: Box<AST> = Box::new(AST::Seq(vec![AST::Char('a')]));
         let e2: Box<AST> = Box::new(AST::Seq(vec![AST::Char('b')]));
 
@@ -552,11 +555,11 @@ mod tests {
 
     #[test]
     fn test_gen_or_failure() {
-        let expect:Result<(), CompileError>  = Err(CompileError::FailOr);
+        let expect: Result<(), CompileError> = Err(CompileError::FailOr);
 
         let mut compiler: Compiler = Compiler {
             p_counter: 100,
-            instructions : Vec::new()
+            instructions: Vec::new(),
         };
 
         let e1: Box<AST> = Box::new(AST::Seq(vec![AST::Char('a')]));
@@ -578,7 +581,7 @@ mod tests {
 
         let mut compiler: Compiler = Compiler {
             p_counter: 0,
-            instructions : Vec::new()
+            instructions: Vec::new(),
         };
 
         let _ = compiler.gen_seq(&v);
@@ -594,14 +597,14 @@ mod tests {
             Instruction::Char(Char::Literal('a')),
             Instruction::Jump(4),
             Instruction::Char(Char::Literal('b')),
-            Instruction::Match
+            Instruction::Match,
         ];
 
         let mut compiler: Compiler = Compiler {
             p_counter: 0,
-            instructions : Vec::new()
+            instructions: Vec::new(),
         };
-    
+
         let e1: Box<AST> = Box::new(AST::Seq(vec![AST::Char('a')]));
         let e2: Box<AST> = Box::new(AST::Seq(vec![AST::Char('b')]));
         let or = AST::Or(e1, e2);
@@ -618,7 +621,7 @@ mod tests {
             Instruction::Char(Char::Literal('a')),
             Instruction::Jump(4),
             Instruction::Char(Char::Literal('b')),
-            Instruction::Match
+            Instruction::Match,
         ];
 
         let e1: Box<AST> = Box::new(AST::Seq(vec![AST::Char('a')]));

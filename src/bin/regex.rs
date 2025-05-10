@@ -1,16 +1,18 @@
+use clap::{ArgAction, Parser};
+use regular_expression::pattern_match;
+use std::{
+    error::Error,
+    fmt::{self, Display},
+};
 use std::{
     fs::File,
-    io::{BufRead, BufReader, Stdin, stdin}
+    io::{stdin, BufRead, BufReader, Stdin},
 };
-use regular_expression::pattern_match;
-use std::{error::Error, fmt::{self, Display}};
-use clap::{ArgAction, Parser};
 
 #[derive(Debug, Parser)]
 #[command(version)]
 #[clap(disable_version_flag = true, disable_help_flag = true)]
 pub struct Args {
-
     #[arg(value_name = "PATTERN")]
     /// パターンを指定する。
     pattern: Option<String>,
@@ -21,7 +23,7 @@ pub struct Args {
 
     #[arg(short = 'e', long = "regexp", value_name = "PATTERN")]
     /// パターンを指定する。このオプションを使用すれば複数のパターンを指定することができる
-    patterns : Vec<String>,
+    patterns: Vec<String>,
 
     #[arg(short = 'c', long = "count")]
     /// マッチした行数のみ表示する
@@ -30,7 +32,7 @@ pub struct Args {
     #[arg(short = 'i', long = "ignore-case")]
     /// 大文字と小文字を区別しない
     pub ignore_case: bool,
-    
+
     #[arg(short = 'v', long = "invert-match")]
     /// マッチしなかった行を表示する
     pub invert_match: bool,
@@ -46,7 +48,7 @@ pub struct Args {
     #[arg(short = 'n', long = "line-number")]
     /// 入力ファイル内での行番号を表示する
     pub line_number: bool,
-    
+
     #[arg(long, action = ArgAction::Help)]
     /// help を表示する
     help: Option<bool>,
@@ -62,12 +64,14 @@ impl Args {
     /// -e オプションが指定されている場合、位置引数に指定した値はファイル名となる。  
     /// & は、付けないと呼び出し時に所有権が移動するため、付けている。
     pub fn get_patterns(&mut self) -> Result<&Vec<String>, CommandLineError> {
-        if self.patterns.is_empty() { // -e オプションなしの場合、位置引数の値を patterns に挿入する
+        if self.patterns.is_empty() {
+            // -e オプションなしの場合、位置引数の値を patterns に挿入する
             match &self.pattern {
                 Some(p) => self.patterns.push(p.to_owned()),
-                None => return Err(CommandLineError::NoPattern)
+                None => return Err(CommandLineError::NoPattern),
             }
-        } else { // -e オプションありの場合、位置引数の値を files に挿入する。
+        } else {
+            // -e オプションありの場合、位置引数の値を files に挿入する。
             match &self.pattern {
                 Some(file) => self.files.insert(0, file.to_owned()),
                 None => {}
@@ -87,10 +91,13 @@ pub enum CommandLineError {
 
 /// CommandLineErrorを表示するため、Displayトレイトを実装
 impl Display for CommandLineError {
-    fn fmt (&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             CommandLineError::NoPattern => write!(f, "CommandLineError : No pattern specified."),
-            CommandLineError::DuplicateFilenameOption => write!(f, "CommandLineError : -h, -H options are specified at the same time.")
+            CommandLineError::DuplicateFilenameOption => write!(
+                f,
+                "CommandLineError : -h, -H options are specified at the same time."
+            ),
         }
     }
 }
@@ -107,18 +114,19 @@ fn main() {
     }
 
     // 引数・オプションに指定したパターンを取得
-    let patterns: Vec<String> = match args.get_patterns(){
+    let patterns: Vec<String> = match args.get_patterns() {
         Ok(pattern_list) => pattern_list.clone(),
         Err(e) => {
             eprintln!("{e}");
             std::process::exit(1);
-        },
+        }
     };
 
     // 引数に指定したファイルを取得
     let files: &Vec<String> = &args.files;
 
-    let is_print_filename: bool = is_print_filename(files.len(), args.no_filename, args.with_filename);
+    let is_print_filename: bool =
+        is_print_filename(files.len(), args.no_filename, args.with_filename);
 
     // マッチした行数を数えるための変数
     // -c オプションが指定されたときに使う
@@ -137,7 +145,7 @@ fn main() {
             args.invert_match,
             is_print_filename,
             args.count,
-            args.line_number
+            args.line_number,
         ) {
             Some(c) => matching_count += c,
             None => {}
@@ -162,7 +170,7 @@ fn main() {
                 args.invert_match,
                 is_print_filename,
                 args.count,
-                args.line_number
+                args.line_number,
             ) {
                 Some(c) => matching_count += c,
                 None => {}
@@ -184,7 +192,7 @@ fn match_file<T: BufRead>(
     invert_match: bool,
     is_filename: bool,
     is_count: bool,
-    is_line_number: bool
+    is_line_number: bool,
 ) -> Option<i32> {
     let mut matching_count: i32 = 0;
     for (i, result) in buf_reader.lines().enumerate() {
@@ -192,7 +200,7 @@ fn match_file<T: BufRead>(
             Ok(line) => line,
             Err(e) => {
                 eprint!("{e}");
-                break
+                break;
             }
         };
 
@@ -202,17 +210,18 @@ fn match_file<T: BufRead>(
                 Ok(is_match) => {
                     if is_match {
                         matching_count += 1;
-                        if !is_count { // -c が指定されたときに、print の処理を飛ばすため。
-                            print(file, &line, i+1, is_filename, is_line_number);
+                        if !is_count {
+                            // -c が指定されたときに、print の処理を飛ばすため。
+                            print(file, &line, i + 1, is_filename, is_line_number);
                         }
                         // マッチした場合はループを抜ける。
                         // 1つのパターンとマッチした時点で、残りのパターンのマッチはしないため。
-                        break
+                        break;
                     }
-                },
+                }
                 Err(e) => {
                     eprintln!("Following error is occured in matching, pattern = '{pattern}', line = '{line}'\n{e}");
-                    return None
+                    return None;
                 }
             }
         }
@@ -223,7 +232,7 @@ fn match_file<T: BufRead>(
 
 /// 行を表示する関数
 /// 以下の2点で処理が分岐するため、関数を分けている。
-/// 
+///
 /// * 行数を表示する・しない  
 /// * ファイル名を表示する・しない。
 fn print(filename: &str, line: &str, line_number: usize, is_filename: bool, is_line_number: bool) {

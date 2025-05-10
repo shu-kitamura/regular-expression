@@ -6,10 +6,10 @@ use std::fmt::{self, Display};
 /// コード生成時に使用する命令(Instruction)を表す型
 #[derive(Debug, PartialEq)]
 pub enum Instruction {
-    Char(Char),           // 文字列をマッチする命令
-    Match,                // マッチング成功を示す命令
-    Jump(usize),          // 指定した命令アドレスにジャンプする命令
-    Split(usize, usize),  // 指定した2つの命令アドレスに分岐する命令
+    Char(Char),          // 文字列をマッチする命令
+    Match,               // マッチング成功を示す命令
+    Jump(usize),         // 指定した命令アドレスにジャンプする命令
+    Split(usize, usize), // 指定した2つの命令アドレスに分岐する命令
 }
 
 /// 文字を表す型
@@ -24,7 +24,7 @@ impl Display for Instruction {
         match self {
             Instruction::Char(inst_char) => match inst_char {
                 Char::Literal(c) => write!(f, "char {}", c),
-                Char::Any => write!(f, "char any")
+                Char::Any => write!(f, "char any"),
             },
             Instruction::Match => write!(f, "match"),
             Instruction::Jump(addr) => write!(f, "jump {:>04}", addr),
