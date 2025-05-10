@@ -1,5 +1,5 @@
 //! コード生成時に使用する型。  
-//! codegen モジュールで使用する。
+//! compiler モジュールで使用する。
 
 use std::fmt::{self, Display};
 
