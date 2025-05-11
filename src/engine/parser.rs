@@ -25,6 +25,9 @@
 use crate::error::ParseError;
 use std::mem::take;
 
+// エスケープ文字を定義
+const ESCAPE_CHARS: [char; 8] = ['\\', '(', ')', '|', '+', '*', '?', '.'];
+
 /// Ast の型
 #[derive(Debug, PartialEq)]
 pub enum Ast {
@@ -40,7 +43,7 @@ pub enum Ast {
 /// エスケープ文字から Ast を生成
 fn parse_escape(pos: usize, c: char) -> Result<Ast, ParseError> {
     match c {
-        '\\' | '(' | ')' | '|' | '+' | '*' | '?' | '.' => Ok(Ast::Char(c)),
+        char if ESCAPE_CHARS.contains(&char) => Ok(Ast::Char(c)),
         _ => Err(ParseError::InvalidEscape(pos, c)),
     }
 }
