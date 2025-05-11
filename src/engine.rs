@@ -68,21 +68,22 @@ pub fn match_line(
 ) -> Result<bool, RegexError> {
     // パターンが ^ で始まるかどうか。
     // 始まる場合、行頭からのマッチのみ実行する。始まらない場合、行頭以外のマッチも実行する。
-    // どちらか判定するために使う。
     let is_caret: bool = pattern.starts_with('^');
-    if is_caret {
-        // パターンが ^ で始まる場合、^ を取り除く。
-        // Ast に ^ が含まれないようにするための処理。
-        pattern = pattern.strip_prefix("^").unwrap().to_string();
+
+    // パターンが ^ で始まる場合、^ を取り除く。
+    // Ast に ^ が含まれないようにするための処理。
+    if let Some(striped) = pattern.strip_prefix("^") {
+        pattern = striped.to_string();
     }
 
     // パターンが $ で終わるかどうか。
-    // 始まる場合、行末かどうかチェックをマッチに含める。
+    // 終わる場合、行末かどうかチェックをマッチに含める。
     let is_dollar: bool = pattern.ends_with('$');
-    if is_dollar {
-        // パターンが $ で終わる場合、$ を取り除く。
-        // Ast に $ が含まれないようにするための処理。
-        pattern = pattern.strip_suffix("$").unwrap().to_string();
+
+    // パターンが $ で終わる場合、$ を取り除く。
+    // Ast に $ が含まれないようにするための処理。
+    if let Some(striped) = pattern.strip_suffix("$") {
+        pattern = striped.to_string();
     }
 
     // -i が指定された場合の処理
