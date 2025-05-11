@@ -592,7 +592,7 @@ mod tests {
     }
 
     #[test]
-    fn test_gen_code_success() {
+    fn test_gen_code_containe_or() {
         // a|b が入力されたケース
         let expect: Vec<Instruction> = vec![
             Instruction::Split(1, 3),
@@ -612,6 +612,84 @@ mod tests {
         let or = Ast::Or(e1, e2);
 
         let _ = compiler.gen_code(&or);
+        let actual: Vec<Instruction> = compiler.instructions;
+        assert_eq!(actual, expect);
+    }
+
+    #[test]
+    fn test_gen_code_contain_any() {
+        // a.b が入力されたケース
+        let expect: Vec<Instruction> = vec![
+            Instruction::Char(Char::Literal('a')),
+            Instruction::Char(Char::Any),
+            Instruction::Char(Char::Literal('b')),
+            Instruction::Match,
+        ];
+        let mut compiler: Compiler = Compiler {
+            p_counter: 0,
+            instructions: Vec::new(),
+        };
+        let ast: Box<Ast> = Box::new(Ast::Seq(vec![Ast::Char('a'), Ast::AnyChar, Ast::Char('b')]));
+        let _ = compiler.gen_code(&ast);
+        let actual: Vec<Instruction> = compiler.instructions;
+        assert_eq!(actual, expect);
+    }
+
+    #[test]
+    fn test_gen_code_contain_star() {
+        // a*b が入力されたケース
+        let expect: Vec<Instruction> = vec![
+            Instruction::Split(1, 3),
+            Instruction::Char(Char::Literal('a')),
+            Instruction::Jump(0),
+            Instruction::Match,
+        ];
+        let mut compiler: Compiler = Compiler {
+            p_counter: 0,
+            instructions: Vec::new(),
+        };
+        let ast: Box<Ast> = Box::new(Ast::Star(Box::new(Ast::Char('a'))));
+        let _ = compiler.gen_code(&ast);
+        let actual: Vec<Instruction> = compiler.instructions;
+        assert_eq!(actual, expect);
+    }
+
+    #[test]
+    fn test_gen_code_contain_plus() {
+        // a+b が入力されたケース
+        let expect: Vec<Instruction> = vec![
+            Instruction::Char(Char::Literal('a')),
+            Instruction::Split(0, 2),
+            Instruction::Match,
+        ];
+        let mut compiler: Compiler = Compiler {
+            p_counter: 0,
+            instructions: Vec::new(),
+        };
+        let ast: Box<Ast> = Box::new(Ast::Plus(Box::new(Ast::Char('a'))));
+        let _ = compiler.gen_code(&ast);
+        let actual: Vec<Instruction> = compiler.instructions;
+        assert_eq!(actual, expect);
+    }
+
+    #[test]
+    fn test_gen_code_contain_question() {
+        // a?b が入力されたケース
+        let expect: Vec<Instruction> = vec![
+            Instruction::Split(1, 2),
+            Instruction::Char(Char::Literal('a')),
+            Instruction::Char(Char::Literal('b')),
+            Instruction::Match,
+        ];
+        let mut compiler: Compiler = Compiler {
+            p_counter: 0,
+            instructions: Vec::new(),
+        };
+        let ast: Box<Ast> = Box::new(Ast::Seq(vec![
+            Ast::Question(Box::new(Ast::Char('a'))),
+            Ast::Char('b'),
+        ]));
+        let _ = compiler.gen_code(&ast);
         let actual: Vec<Instruction> = compiler.instructions;
         assert_eq!(actual, expect);
     }
