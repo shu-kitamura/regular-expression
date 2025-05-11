@@ -81,6 +81,8 @@ impl Compiler {
             Ast::AnyChar => self.gen_anychar(),
             Ast::Char(c) => self.gen_char(*c),
             Ast::Or(e1, e2) => self.gen_or(e1, e2),
+            // 以下の Plus と Star の実装は (a+)* のように Star や Plus が二重となっている場合にスタックオーバーフローする問題を回避するための実装。
+            // このような (((r*)*)*...*)* を再帰的に処理して1つの r* へと変換する。
             Ast::Plus(ast) => match &**ast {
                 Ast::Star(child_ast) => self.gen_expr(child_ast),
                 Ast::Seq(child_vec) if child_vec.len() == 1 => {
