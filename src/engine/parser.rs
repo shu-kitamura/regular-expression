@@ -42,9 +42,10 @@ pub enum Ast {
 
 /// エスケープ文字から Ast を生成
 fn parse_escape(pos: usize, c: char) -> Result<Ast, ParseError> {
-    match c {
-        char if ESCAPE_CHARS.contains(&char) => Ok(Ast::Char(c)),
-        _ => Err(ParseError::InvalidEscape(pos, c)),
+    if ESCAPE_CHARS.contains(&c) {
+        Ok(Ast::Char(c))
+    } else {
+        Err(ParseError::InvalidEscape(pos, c))
     }
 }
 
