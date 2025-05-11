@@ -325,7 +325,7 @@ mod tests {
                 assert_eq!(*left, 1);
                 assert_eq!(*right, 0);
             }
-            _ => panic!("インデックス 0 には Jump 命令があるはず"),
+            _ => unreachable!(),
         }
     }
 
@@ -360,8 +360,6 @@ mod tests {
         assert!(result.is_ok());
         if let Some(Instruction::Split(_, right)) = compiler.instructions.get(0) {
             assert_eq!(*right, 42);
-        } else {
-            panic!("インデックス 0 には Split 命令があるはず");
         }
 
         // インデックス 1 の Jump 命令のアドレスを更新する
@@ -369,8 +367,6 @@ mod tests {
         assert!(result.is_ok());
         if let Some(Instruction::Jump(addr)) = compiler.instructions.get(1) {
             assert_eq!(*addr, 42);
-        } else {
-            panic!("インデックス 1 には Jump 命令があるはず");
         }
     }
 
