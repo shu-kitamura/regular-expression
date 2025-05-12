@@ -81,44 +81,8 @@ impl Compiler {
             Ast::AnyChar => self.gen_anychar(),
             Ast::Char(c) => self.gen_char(*c),
             Ast::Or(e1, e2) => self.gen_or(e1, e2),
-            // 以下の Plus と Star の実装は (a+)* のように Star や Plus が二重となっている場合にスタックオーバーフローする問題を回避するための実装。
-            // このような (((r*)*)*...*)* を再帰的に処理して1つの r* へと変換する。
-            Ast::Plus(ast) => match &**ast {
-                Ast::Star(child_ast) => self.gen_expr(child_ast),
-                Ast::Seq(child_vec) if child_vec.len() == 1 => {
-                    if let Some(child_ast @ Ast::Star(_)) = child_vec.first() {
-                        self.gen_expr(child_ast)
-                    } else {
-                        self.gen_expr(ast)
-                    }
-                }
-                Ast::Or(child_ast1, child_ast2) => {
-                    match self.gen_expr(child_ast1) {
-                        Ok(()) => {}
-                        Err(e) => return Err(e),
-                    };
-                    self.gen_expr(child_ast2)
-                }
-                e => self.gen_plus(e),
-            },
-            Ast::Star(ast) => match &**ast {
-                Ast::Star(child_ast) => self.gen_expr(child_ast),
-                Ast::Seq(child_vec) if child_vec.len() == 1 => {
-                    if let Some(child_ast @ Ast::Star(_)) = child_vec.first() {
-                        self.gen_expr(child_ast)
-                    } else {
-                        self.gen_expr(ast)
-                    }
-                }
-                Ast::Or(child_ast1, child_ast2) => {
-                    match self.gen_expr(child_ast1) {
-                        Ok(()) => {}
-                        Err(e) => return Err(e),
-                    };
-                    self.gen_expr(child_ast2)
-                }
-                e => self.gen_star(e),
-            },
+            Ast::Plus(ast) => self.gen_plus(ast),
+            Ast::Star(ast) => self.gen_star(ast),
             Ast::Question(ast) => self.gen_question(ast),
             Ast::Seq(v) => self.gen_seq(v),
         }

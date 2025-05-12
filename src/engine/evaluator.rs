@@ -1,5 +1,7 @@
 //! Instruction と char配列を受け取って評価する
 
+use std::collections::HashSet;
+
 use crate::{
     engine::{
         instruction::{Char, Instruction},
@@ -38,6 +40,7 @@ fn eval_depth(
     mut p_counter: usize,
     mut char_index: usize,
     is_end_dollar: bool,
+    visited: &mut HashSet<(usize, usize)>,
 ) -> Result<bool, EvalError> {
     loop {
         // Instruction を取得
@@ -64,13 +67,32 @@ fn eval_depth(
             }
             Instruction::Jump(addr) => p_counter = *addr,
             Instruction::Split(addr1, addr2) => {
+                // すでに訪れた状態の場合、無限ループを避けるために false を返す
+                if !visited.insert((*addr1, char_index)) {
+                    return Ok(false);
+                }
+
                 // 1つ目の Split を評価する
-                if eval_depth(instructions, chars, *addr1, char_index, is_end_dollar)? {
+                if eval_depth(
+                    instructions,
+                    chars,
+                    *addr1,
+                    char_index,
+                    is_end_dollar,
+                    visited,
+                )? {
                     return Ok(true);
                 }
 
                 // 1つ目の Split が失敗した場合、2つ目の Split を評価する
-                return eval_depth(instructions, chars, *addr2, char_index, is_end_dollar);
+                return eval_depth(
+                    instructions,
+                    chars,
+                    *addr2,
+                    char_index,
+                    is_end_dollar,
+                    visited,
+                );
             }
         }
     }
@@ -78,13 +100,16 @@ fn eval_depth(
 
 /// 命令列の評価を行う関数
 pub fn eval(inst: &[Instruction], chars: &[char], is_end_dollar: bool) -> Result<bool, EvalError> {
-    eval_depth(inst, chars, 0, 0, is_end_dollar)
+    let mut visited = HashSet::new();
+    eval_depth(inst, chars, 0, 0, is_end_dollar, &mut visited)
 }
 
 // ----- テストコード -----
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashSet;
+
     use crate::{
         engine::{
             evaluator::{eval_char, eval_depth, increment_pc_and_index},
@@ -153,13 +178,14 @@ mod tests {
 
         // "abc" とマッチするケース
         let chars1: Vec<char> = vec!['a', 'b', 'c'];
-
-        let actual1 = eval_depth(&insts, &chars1, 0, 0, false).unwrap();
+        let mut visited1: HashSet<(usize, usize)> = HashSet::new();
+        let actual1 = eval_depth(&insts, &chars1, 0, 0, false, &mut visited1).unwrap();
         assert_eq!(actual1, true);
 
         // "abd"とマッチするケース
         let chars2: Vec<char> = vec!['a', 'b', 'c'];
-        let actual2 = eval_depth(&insts, &chars2, 0, 0, false).unwrap();
+        let mut visited2: HashSet<(usize, usize)> = HashSet::new();
+        let actual2 = eval_depth(&insts, &chars2, 0, 0, false, &mut visited2).unwrap();
         assert_eq!(actual2, true);
     }
 
@@ -178,8 +204,8 @@ mod tests {
 
         // "abx" とマッチするケース
         let chars: Vec<char> = vec!['a', 'b', 'X'];
-
-        let actual = eval_depth(&insts, &chars, 0, 0, false).unwrap();
+        let mut visited: HashSet<(usize, usize)> = HashSet::new();
+        let actual = eval_depth(&insts, &chars, 0, 0, false, &mut visited).unwrap();
         assert_eq!(actual, false);
     }
 
@@ -198,13 +224,42 @@ mod tests {
 
         // "xxxabc" とマッチするケース (true になる)
         let chars1: Vec<char> = vec!['a', 'b', 'c'];
-
-        let actual1: bool = eval_depth(&insts, &chars1, 0, 0, true).unwrap();
+        let mut visited1: HashSet<(usize, usize)> = HashSet::new();
+        let actual1: bool = eval_depth(&insts, &chars1, 0, 0, true, &mut visited1).unwrap();
         assert_eq!(actual1, true);
 
         // "abcxxx"とマッチするケース (false になる)
         let chars2: Vec<char> = vec!['a', 'b', 'c', 'x', 'x', 'x'];
-        let actual2: bool = eval_depth(&insts, &chars2, 0, 0, true).unwrap();
+        let mut visited2: HashSet<(usize, usize)> = HashSet::new();
+        let actual2: bool = eval_depth(&insts, &chars2, 0, 0, true, &mut visited2).unwrap();
+        assert_eq!(actual2, false);
+    }
+
+    #[test]
+    fn test_eval_depth_infinite_loop() {
+        // "abc(d*)*" が入力された Instruction
+        let insts: Vec<Instruction> = vec![
+            Instruction::Char(Char::Literal('a')),
+            Instruction::Char(Char::Literal('b')),
+            Instruction::Char(Char::Literal('c')),
+            Instruction::Split(4, 8),
+            Instruction::Split(5, 7),
+            Instruction::Char(Char::Literal('d')),
+            Instruction::Jump(4),
+            Instruction::Jump(3),
+            Instruction::Match,
+        ];
+
+        // "abcde" とマッチするケース（true）
+        let chars1: Vec<char> = vec!['a', 'b', 'c', 'd', 'e'];
+        let mut visited1: HashSet<(usize, usize)> = HashSet::new();
+        let actual1 = eval_depth(&insts, &chars1, 0, 0, false, &mut visited1).unwrap();
+        assert_eq!(actual1, true);
+
+        // "bcdef" とマッチするケース（false）
+        let chars2: Vec<char> = vec!['b', 'c', 'd', 'e', 'f'];
+        let mut visited2: HashSet<(usize, usize)> = HashSet::new();
+        let actual2 = eval_depth(&insts, &chars2, 0, 0, false, &mut visited2).unwrap();
         assert_eq!(actual2, false);
     }
 
@@ -216,8 +271,8 @@ mod tests {
             Instruction::Match,
         ];
         let chars: Vec<char> = vec!['a', 'b', 'c', 'd'];
-
-        let actual = eval_depth(&insts, &chars, usize::MAX, 0, false);
+        let mut visited: HashSet<(usize, usize)> = HashSet::new();
+        let actual = eval_depth(&insts, &chars, usize::MAX, 0, false, &mut visited);
         assert_eq!(actual, Err(EvalError::InvalidPC));
     }
 }
