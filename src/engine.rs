@@ -165,6 +165,19 @@ mod tests {
     }
 
     #[test]
+    fn test_match_string_empty() {
+        // パターン "a*" と空文字列のマッチングを行うテスト
+        let insts: Vec<Instruction> = vec![
+            Instruction::Split(1, 3),
+            Instruction::Char(Char::Literal('a')),
+            Instruction::Jump(0),
+            Instruction::Match,
+        ];
+        let actual: bool = match_string(&insts, "", false).unwrap();
+        assert_eq!(actual, true);
+    }
+
+    #[test]
     fn test_match_string_eval_error() {
         let insts: Vec<Instruction> = vec![
             Instruction::Char(Char::Literal('a')),
