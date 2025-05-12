@@ -64,13 +64,13 @@ fn eval_depth(
             }
             Instruction::Jump(addr) => p_counter = *addr,
             Instruction::Split(addr1, addr2) => {
-                if chars.len() <= char_index {
-                    return Ok(false);
+                // 1つ目の Split を評価する
+                if eval_depth(instructions, chars, *addr1, char_index, is_end_dollar)? {
+                    return Ok(true);
                 }
-                return Ok(
-                    eval_depth(instructions, chars, *addr1, char_index, is_end_dollar)?
-                        || eval_depth(instructions, chars, *addr2, char_index, is_end_dollar)?,
-                );
+
+                // 1つ目の Split が失敗した場合、2つ目の Split を評価する
+                return eval_depth(instructions, chars, *addr2, char_index, is_end_dollar);
             }
         }
     }
