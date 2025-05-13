@@ -1,5 +1,5 @@
 use clap::{ArgAction, Parser};
-use regular_expression::pattern_match;
+use regular_expression::Regex;
 use std::{
     fs::File,
     io::{stdin, BufRead, BufReader, Stdin},
@@ -109,6 +109,16 @@ fn main() {
         }
     };
 
+    let regexes: Vec<Regex> = patterns
+        .iter()
+        .map(|p| {
+            Regex::new(p, args.ignore_case, args.invert_match).unwrap_or_else(|e| {
+                eprintln!("RegexError: {e}");
+                std::process::exit(1);
+            })
+        })
+        .collect();
+
     // マッチした行数を数えるための変数
     // -c オプションが指定されたときに使う
     let mut matching_count: usize = 0;
@@ -118,7 +128,7 @@ fn main() {
         let mut buf_reader: BufReader<Stdin> = BufReader::new(stdin);
 
         // 標準入力を1行ずつ read し、マッチングを実行する
-        if let Some(c) = match_file(&mut buf_reader, STDIN_FILENAME, &patterns, &args) {
+        if let Some(c) = match_file(&mut buf_reader, STDIN_FILENAME, &regexes, &args) {
             matching_count += c
         }
     } else {
@@ -133,7 +143,7 @@ fn main() {
             };
 
             // ファイルを1行ずつ read し、マッチングを実行する
-            if let Some(c) = match_file(&mut buf_reader, file, &patterns, &args) {
+            if let Some(c) = match_file(&mut buf_reader, file, &regexes, &args) {
                 matching_count += c
             };
         }
@@ -148,11 +158,9 @@ fn main() {
 fn match_file<T: BufRead>(
     buf_reader: T,
     file: &str,
-    patterns: &Vec<String>,
+    regexes: &[Regex],
     args: &Args,
 ) -> Option<usize> {
-    let ignore_case = args.ignore_case;
-    let invert_match = args.invert_match;
     let is_filename = is_print_filename(args.files.len(), args.no_filename, args.with_filename);
     let is_count = args.count;
     let is_line_number = args.line_number;
@@ -168,8 +176,8 @@ fn match_file<T: BufRead>(
         };
 
         // read した行を指定したパターンとマッチ
-        for pattern in patterns {
-            match pattern_match(pattern, &line, ignore_case, invert_match) {
+        for regex in regexes {
+            match regex.is_match(&line) {
                 Ok(is_match) => {
                     if is_match {
                         matching_count += 1;
@@ -182,8 +190,8 @@ fn match_file<T: BufRead>(
                         break;
                     }
                 }
-                Err(e) => {
-                    eprintln!("Following error is occured in matching, pattern = '{pattern}', line = '{line}'\n{e}");
+                Err(_) => {
+                    // eprintln!("Following error is occured in matching, pattern = '{pattern}', line = '{line}'\n{e}");
                     return None;
                 }
             }

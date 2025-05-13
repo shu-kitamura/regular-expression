@@ -39,70 +39,39 @@ where
     }
 }
 
-/// 文字列のマッチングを実行する。
-fn match_string(insts: &[Instruction], str: &str, is_end_dollar: bool) -> Result<bool, RegexError> {
-    let charcters: Vec<char> = str.chars().collect();
-    let match_result: bool = eval(insts, &charcters, is_end_dollar)?;
-    Ok(match_result)
-}
-
-/// パターンと文字列のマッチングを実行する
-///
-/// # 引数
-///
-/// * pattern -> 正規表現のパターン
-/// * line -> マッチング対象の文字列
-/// * is_ignore_case -> 大小文字の区別をするかどうか
-/// * is_invert_match -> マッチングの結果を逆にする
-///
-/// # 返り値
-///
-/// エラーなく実行でき、マッチングに成功した場合 true を返す。  
-/// エラーなく実行でき、マッチングに失敗した場合 false を返す。  
-/// ※ is_invert_match に true が指定されている場合は マッチング結果が反対になる。  
-pub fn match_line(
-    mut pattern: String,
-    mut line: String,
-    is_ignore_case: bool,
-    is_invert_match: bool,
-) -> Result<bool, RegexError> {
-    // パターンが ^ で始まるかどうか。
-    // 始まる場合、行頭からのマッチのみ実行する。始まらない場合、行頭以外のマッチも実行する。
-    let is_caret: bool = pattern.starts_with('^');
-
-    // パターンが ^ で始まる場合、^ を取り除く。
-    // Ast に ^ が含まれないようにするための処理。
+/// パターンをパースして、コンパイルする
+pub fn compile_pattern(mut pattern: &str) -> Result<(Vec<Instruction>, bool, bool), RegexError> {
+    let is_caret = pattern.starts_with('^');
     if let Some(striped) = pattern.strip_prefix("^") {
-        pattern = striped.to_string();
+        pattern = striped;
     }
 
-    // パターンが $ で終わるかどうか。
-    // 終わる場合、行末かどうかチェックをマッチに含める。
-    let is_dollar: bool = pattern.ends_with('$');
-
-    // パターンが $ で終わる場合、$ を取り除く。
-    // Ast に $ が含まれないようにするための処理。
+    let is_dollar = pattern.ends_with('$');
     if let Some(striped) = pattern.strip_suffix("$") {
-        pattern = striped.to_string();
-    }
-
-    // -i が指定された場合の処理
-    // パターンと行を小文字にすることで、区別をしないようにする
-    if is_ignore_case {
-        pattern = pattern.to_lowercase();
-        line = line.to_lowercase();
+        pattern = striped;
     }
 
     // パターンから Ast を生成する。
-    let ast: Ast = parse(pattern.as_str())?;
+    let ast: Ast = parse(pattern)?;
 
     // Ast から コード(Instructionの配列)を生成する。
-    let code: Vec<Instruction> = compile(&ast)?;
+    let instructions: Vec<Instruction> = compile(&ast)?;
 
+    Ok((instructions, is_caret, is_dollar))
+}
+
+/// パターンと文字列のマッチングを実行する
+pub fn match_line(
+    code: &[Instruction],
+    line: &str,
+    is_caret: bool,
+    is_dollar: bool,
+    is_invert_match: bool,
+) -> Result<bool, RegexError> {
     let mut is_match: bool = false;
     // パターンの1文字目が ^ の場合、行頭からのマッチのみ実行する
     if is_caret {
-        is_match = match_string(&code, &line, is_dollar)?;
+        is_match = match_string(code, line, is_dollar)?;
     } else {
         for (i, _) in line.char_indices() {
             // abcdefg という文字列の場合、以下のように順にマッチングする。
@@ -110,7 +79,7 @@ pub fn match_line(
             //     ループ2 : bcdefg
             //     ・・・
             //     ループN : g
-            is_match = match_string(&code, &line[i..], is_dollar)?;
+            is_match = match_string(code, &line[i..], is_dollar)?;
 
             // マッチングが成功した場合、ループを抜ける
             if is_match {
@@ -121,6 +90,12 @@ pub fn match_line(
 
     Ok(is_match ^ is_invert_match)
 }
+/// 文字列のマッチングを実行する。
+fn match_string(insts: &[Instruction], str: &str, is_end_dollar: bool) -> Result<bool, RegexError> {
+    let charcters: Vec<char> = str.chars().collect();
+    let match_result: bool = eval(insts, &charcters, is_end_dollar)?;
+    Ok(match_result)
+}
 
 // ----- テストコード・試し -----
 
@@ -128,10 +103,11 @@ pub fn match_line(
 mod tests {
     use crate::{
         engine::{
+            compile_pattern,
             instruction::{Char, Instruction},
             match_line, match_string, safe_add,
         },
-        error::{EvalError, ParseError, RegexError},
+        error::{EvalError, RegexError},
     };
 
     #[test]
@@ -194,78 +170,6 @@ mod tests {
     }
 
     #[test]
-    fn test_match_line_true() {
-        let actual: bool = match_line(
-            "ab*(c|d)".to_string(),
-            "xorabbbbd".to_string(),
-            false,
-            false,
-        )
-        .unwrap();
-        assert_eq!(actual, true);
-    }
-
-    #[test]
-    fn test_match_line_false() {
-        let actual: bool =
-            match_line("Ab*(c|d)".to_string(), "abbbbxccd".to_string(), true, false).unwrap();
-        assert_eq!(actual, false);
-    }
-
-    #[test]
-    fn test_match_invert() {
-        let actual: bool =
-            match_line("Ab*(c|d)".to_string(), "abbbbxccd".to_string(), true, true).unwrap();
-        assert_eq!(actual, true);
-    }
-
-    #[test]
-    fn test_match_line_beginning_caret() {
-        // a で始まり、bの0回以上の繰り返し、 c があるので、マッチすることを期待。
-        // (true を期待するケース)
-        let actual1: bool = match_line(
-            "^ab*(c|d)".to_string(),
-            "abbbbccd".to_string(),
-            false,
-            false,
-        )
-        .unwrap();
-        assert_eq!(actual1, true);
-
-        // a で始まっていないので、マッチしないことを期待。
-        // (false を期待するケース)
-        let actual2: bool =
-            match_line("^b*(c|d)".to_string(), "abbbbccd".to_string(), false, false).unwrap();
-        assert_eq!(actual2, false);
-    }
-
-    #[test]
-    fn test_match_line_is_end_dollar() {
-        // パターンと一致する部分(abd)が行末なので、マッチすることを期待。
-        // (true を期待するケース)
-        let actual1: bool =
-            match_line("ab(c|d)$".to_string(), "asdfabd".to_string(), false, false).unwrap();
-        assert_eq!(actual1, true);
-
-        // パターンと一致する部分(abc)が行末ではないので、マッチしないことを期待。
-        // (false を期待するケース)
-        let actual2: bool = match_line(
-            "ab(c|d)$".to_string(),
-            "asdfabdxxx".to_string(),
-            false,
-            false,
-        )
-        .unwrap();
-        assert_eq!(actual2, false);
-    }
-
-    #[test]
-    fn test_match_line_parse_error() {
-        let actual = match_line("ab(c|d".to_string(), "a".to_string(), false, false);
-        assert_eq!(actual, Err(RegexError::Parse(ParseError::NoRightParen)));
-    }
-
-    #[test]
     fn test_safe_add_success() {
         use crate::error::CompileError;
         let mut u: usize = 1;
@@ -282,5 +186,130 @@ mod tests {
         let actual: RegexError =
             safe_add(&mut u, &1, || RegexError::Compile(CompileError::PCOverFlow)).unwrap_err();
         assert_eq!(actual, expect);
+    }
+
+    #[test]
+    fn test_compile_pattern() {
+        // "ab(c|d)" というパターンをコンパイルするテスト
+        let expect = vec![
+            Instruction::Char(Char::Literal('a')),
+            Instruction::Char(Char::Literal('b')),
+            Instruction::Split(3, 5),
+            Instruction::Char(Char::Literal('c')),
+            Instruction::Jump(6),
+            Instruction::Char(Char::Literal('d')),
+            Instruction::Match,
+        ];
+
+        let (code, is_caret, is_dollar) = compile_pattern("ab(c|d)").unwrap();
+        assert_eq!(code, expect);
+        assert_eq!(is_caret, false);
+        assert_eq!(is_dollar, false);
+    }
+
+    #[test]
+    fn test_compile_pattern_caret() {
+        // "^a*" というパターンをコンパイルするテスト
+        let expect = vec![
+            Instruction::Split(1, 3),
+            Instruction::Char(Char::Literal('a')),
+            Instruction::Jump(0),
+            Instruction::Match,
+        ];
+
+        let (code, is_caret, is_dollar) = compile_pattern("^a*").unwrap();
+        assert_eq!(code, expect);
+        assert_eq!(is_caret, true);
+        assert_eq!(is_dollar, false);
+    }
+
+    #[test]
+    fn test_compile_pattern_dollar() {
+        // "a?b$" というパターンをコンパイルするテスト
+        let expect = vec![
+            Instruction::Split(1, 2),
+            Instruction::Char(Char::Literal('a')),
+            Instruction::Char(Char::Literal('b')),
+            Instruction::Match,
+        ];
+
+        let (code, is_caret, is_dollar) = compile_pattern("a?b$").unwrap();
+        assert_eq!(code, expect);
+        assert_eq!(is_caret, false);
+        assert_eq!(is_dollar, true);
+    }
+
+    #[test]
+    fn test_match_line() {
+        // "ab(c|d)" というパターンに対してのテスト
+        let insts: Vec<Instruction> = vec![
+            Instruction::Char(Char::Literal('a')),
+            Instruction::Char(Char::Literal('b')),
+            Instruction::Split(3, 5),
+            Instruction::Char(Char::Literal('c')),
+            Instruction::Jump(6),
+            Instruction::Char(Char::Literal('d')),
+            Instruction::Match,
+        ];
+        // "abc" という文字列をマッチングするテスト
+        let actual1: bool = match_line(&insts, "abc", false, false, false).unwrap();
+        assert_eq!(actual1, true);
+
+        // "abe" という文字列をマッチングするテスト
+        let actual2: bool = match_line(&insts, "abe", false, false, false).unwrap();
+        assert_eq!(actual2, false);
+    }
+    #[test]
+    fn test_match_line_caret() {
+        // "^a+b" というパターンに対してのテスト
+        let insts: Vec<Instruction> = vec![
+            Instruction::Char(Char::Literal('a')),
+            Instruction::Split(0, 2),
+            Instruction::Char(Char::Literal('b')),
+            Instruction::Match,
+        ];
+        // "aab" という文字列をマッチングするテスト
+        let actual1: bool = match_line(&insts, "aab", true, false, false).unwrap();
+        assert_eq!(actual1, true);
+
+        // "xabcd" という文字列をマッチングするテスト
+        let actual2: bool = match_line(&insts, "xabcd", true, false, false).unwrap();
+        assert_eq!(actual2, false);
+    }
+
+    #[test]
+    fn test_match_line_dollar() {
+        // "ab$" というパターンに対してのテスト
+        let insts: Vec<Instruction> = vec![
+            Instruction::Char(Char::Literal('a')),
+            Instruction::Char(Char::Literal('b')),
+            Instruction::Match,
+        ];
+        // "ab" という文字列をマッチングするテスト
+        let actual1: bool = match_line(&insts, "ab", false, true, false).unwrap();
+        assert_eq!(actual1, true);
+
+        // "abc" という文字列をマッチングするテスト
+        let actual2: bool = match_line(&insts, "abc", false, true, false).unwrap();
+        assert_eq!(actual2, false);
+    }
+
+    #[test]
+    fn test_match_line_invert() {
+        // "a+b" というパターンに対してのテスト
+        let insts: Vec<Instruction> = vec![
+            Instruction::Char(Char::Literal('a')),
+            Instruction::Split(0, 2),
+            Instruction::Char(Char::Literal('b')),
+            Instruction::Match,
+        ];
+
+        // "ab" という文字列をマッチングするテスト
+        let actual1: bool = match_line(&insts, "abc", false, false, true).unwrap();
+        assert_eq!(actual1, false);
+
+        // "abc" という文字列をマッチングするテスト
+        let actual2: bool = match_line(&insts, "acd", false, false, true).unwrap();
+        assert_eq!(actual2, true);
     }
 }
