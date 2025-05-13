@@ -8,7 +8,7 @@ use crate::{
     engine::{
         compiler::compile,
         evaluator::eval,
-        instruction::Instruction,
+        instruction::{Char, Instruction},
         parser::{parse, Ast},
     },
     error::RegexError,
@@ -73,7 +73,14 @@ pub fn match_line(
     if is_caret {
         is_match = match_string(code, line, is_dollar)?;
     } else {
-        for (i, _) in line.char_indices() {
+        for (i, ch) in line.char_indices() {
+            // code の最初の文字と異なる場合、スキップする（どうせマッチしないため）
+            // 無駄なマッチングを減らして高速化するため
+            if let Some(Instruction::Char(Char::Literal(first_ch))) = code.first() {
+                if ch != *first_ch {
+                    continue;
+                }
+            }
             // abcdefg という文字列の場合、以下のように順にマッチングする。
             //     ループ1 : abcdefg
             //     ループ2 : bcdefg
@@ -258,6 +265,17 @@ mod tests {
         // "abe" という文字列をマッチングするテスト
         let actual2: bool = match_line(&insts, "abe", false, false, false).unwrap();
         assert_eq!(actual2, false);
+
+        // "a?b$" というパターンに対するテスト
+        // 命令列の 1 番目が Char 以外のテスト
+        let insts = vec![
+            Instruction::Split(1, 2),
+            Instruction::Char(Char::Literal('a')),
+            Instruction::Char(Char::Literal('b')),
+            Instruction::Match,
+        ];
+        let actual3 = match_line(&insts, "ab", false, false, false).unwrap();
+        assert_eq!(actual3, true);
     }
     #[test]
     fn test_match_line_caret() {
