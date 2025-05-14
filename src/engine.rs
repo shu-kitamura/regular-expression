@@ -68,16 +68,18 @@ pub fn match_line(
     is_dollar: bool,
     is_invert_match: bool,
 ) -> Result<bool, RegexError> {
+    let characters: Vec<char> = line.chars().collect();
+
     let mut is_match: bool = false;
     // パターンの1文字目が ^ の場合、行頭からのマッチのみ実行する
     if is_caret {
-        is_match = match_string(code, line, is_dollar)?;
+        is_match = match_string(code, &characters, is_dollar)?;
     } else {
-        for (i, ch) in line.char_indices() {
+        for (i, ch) in characters.iter().enumerate() {
             // code の最初の文字と異なる場合、スキップする（どうせマッチしないため）
             // 無駄なマッチングを減らして高速化するため
             if let Some(Instruction::Char(Char::Literal(first_ch))) = code.first() {
-                if ch != *first_ch {
+                if ch != first_ch {
                     continue;
                 }
             }
@@ -86,7 +88,7 @@ pub fn match_line(
             //     ループ2 : bcdefg
             //     ・・・
             //     ループN : g
-            is_match = match_string(code, &line[i..], is_dollar)?;
+            is_match = match_string(code, &characters[i..], is_dollar)?;
 
             // マッチングが成功した場合、ループを抜ける
             if is_match {
@@ -98,9 +100,8 @@ pub fn match_line(
     Ok(is_match ^ is_invert_match)
 }
 /// 文字列のマッチングを実行する。
-fn match_string(insts: &[Instruction], str: &str, is_end_dollar: bool) -> Result<bool, RegexError> {
-    let charcters: Vec<char> = str.chars().collect();
-    let match_result: bool = eval(insts, &charcters, is_end_dollar)?;
+fn match_string(insts: &[Instruction], chars: &[char], is_end_dollar: bool) -> Result<bool, RegexError> {
+    let match_result: bool = eval(insts, &chars, is_end_dollar)?;
     Ok(match_result)
 }
 
@@ -108,6 +109,8 @@ fn match_string(insts: &[Instruction], str: &str, is_end_dollar: bool) -> Result
 
 #[cfg(test)]
 mod tests {
+    use std::char;
+
     use crate::{
         engine::{
             compile_pattern,
@@ -128,7 +131,9 @@ mod tests {
             Instruction::Char(Char::Literal('d')),
             Instruction::Match,
         ];
-        let actual: bool = match_string(&insts, "abc", false).unwrap();
+
+        let characters: Vec<char> = "abcd".chars().collect();
+        let actual: bool = match_string(&insts, &characters, false).unwrap();
         assert_eq!(actual, true);
     }
 
@@ -143,7 +148,8 @@ mod tests {
             Instruction::Char(Char::Literal('d')),
             Instruction::Match,
         ];
-        let actual: bool = match_string(&insts, "abx", false).unwrap();
+        let characters: Vec<char> = "abx".chars().collect();
+        let actual: bool = match_string(&insts, &characters, false).unwrap();
         assert_eq!(actual, false);
     }
 
@@ -156,7 +162,8 @@ mod tests {
             Instruction::Jump(0),
             Instruction::Match,
         ];
-        let actual: bool = match_string(&insts, "", false).unwrap();
+        let characters: Vec<char> = "".chars().collect();
+        let actual: bool = match_string(&insts, &characters, false).unwrap();
         assert_eq!(actual, true);
     }
 
@@ -172,7 +179,8 @@ mod tests {
             Instruction::Match,
         ];
 
-        let actual = match_string(&insts, "abc", false);
+        let characters: Vec<char> = "abc".chars().collect();
+        let actual = match_string(&insts, &characters, false);
         assert_eq!(actual, Err(RegexError::Eval(EvalError::InvalidPC)));
     }
 
