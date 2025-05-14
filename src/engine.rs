@@ -78,7 +78,7 @@ pub fn match_line(
         for (i, ch) in characters.iter().enumerate() {
             // code の最初の文字と異なる場合、スキップする（どうせマッチしないため）
             // 無駄なマッチングを減らして高速化するため
-            if let Some(Instruction::Char(Char::Literal(first_ch))) = code.first() {
+            if let Some(first_ch) = get_first_char(code) {
                 if ch != first_ch {
                     continue;
                 }
@@ -103,6 +103,14 @@ pub fn match_line(
 fn match_string(insts: &[Instruction], chars: &[char], is_end_dollar: bool) -> Result<bool, RegexError> {
     let match_result: bool = eval(insts, &chars, is_end_dollar)?;
     Ok(match_result)
+}
+
+/// 命令列の最初が Char の場合、最初の文字を取得する
+fn get_first_char(insts: &[Instruction]) -> Option<&char> {
+    match insts.first() {
+        Some(Instruction::Char(Char::Literal(ch))) => Some(ch),
+        _ => None,
+    }
 }
 
 // ----- テストコード・試し -----
