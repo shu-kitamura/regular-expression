@@ -12,7 +12,7 @@ use crate::{
 
 /// char と Instruction を評価する
 fn eval_char(inst: &Char, string: &str, index: usize) -> bool {
-// 文字列の長さが index より小さい場合、範囲外アクセスになるため、false を返す
+    // 文字列の長さが index より小さい場合、範囲外アクセスになるため、false を返す
     let inst_char = match inst {
         Char::Literal(c) => *c,
         Char::Any => return true,

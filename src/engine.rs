@@ -71,7 +71,7 @@ pub fn match_line(
     let mut is_match: bool = false;
 
     if is_caret {
-        return Ok(match_string(code, &line, is_dollar)? ^ is_invert_match);
+        return Ok(match_string(code, line, is_dollar)? ^ is_invert_match);
     }
 
     // 命令列が Char の場合、
