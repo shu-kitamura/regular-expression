@@ -69,20 +69,29 @@ pub fn match_line(
     is_invert_match: bool,
 ) -> Result<bool, RegexError> {
     let characters: Vec<char> = line.chars().collect();
-
     let mut is_match: bool = false;
-    // パターンの1文字目が ^ の場合、行頭からのマッチのみ実行する
+
     if is_caret {
-        is_match = match_string(code, &characters, is_dollar)?;
-    } else {
-        for (i, ch) in characters.iter().enumerate() {
-            // code の最初の文字と異なる場合、スキップする（どうせマッチしないため）
-            // 無駄なマッチングを減らして高速化するため
-            if let Some(first_ch) = get_first_char(code) {
-                if ch != first_ch {
-                    continue;
-                }
+        return Ok(match_string(code, &characters, is_dollar)? ^ is_invert_match);
+    }
+
+    // 命令列が Char の場合、
+    // 先頭のリテラルと同じ文字からスタートする場合のみマッチングを行う
+    // match_string の呼び出し回数を削減し、高速化を図るため
+    if let Some(first_ch) = get_first_char(code) {
+        let mut pos = 0;
+        while let Some(i) = line[pos..].find(first_ch) {
+            let start = pos + i;
+
+            is_match = match_string(code, &characters[start..], is_dollar)?;
+            if is_match {
+                break;
             }
+            pos = start + 1;
+        }
+    } else {
+        // 先頭リテラル無し → 旧ループ
+        for i in 0..characters.len() {
             // abcdefg という文字列の場合、以下のように順にマッチングする。
             //     ループ1 : abcdefg
             //     ループ2 : bcdefg
@@ -99,16 +108,21 @@ pub fn match_line(
 
     Ok(is_match ^ is_invert_match)
 }
+
 /// 文字列のマッチングを実行する。
-fn match_string(insts: &[Instruction], chars: &[char], is_end_dollar: bool) -> Result<bool, RegexError> {
-    let match_result: bool = eval(insts, &chars, is_end_dollar)?;
+fn match_string(
+    insts: &[Instruction],
+    chars: &[char],
+    is_end_dollar: bool,
+) -> Result<bool, RegexError> {
+    let match_result: bool = eval(insts, chars, is_end_dollar)?;
     Ok(match_result)
 }
 
 /// 命令列の最初が Char の場合、最初の文字を取得する
-fn get_first_char(insts: &[Instruction]) -> Option<&char> {
+fn get_first_char(insts: &[Instruction]) -> Option<char> {
     match insts.first() {
-        Some(Instruction::Char(Char::Literal(ch))) => Some(ch),
+        Some(Instruction::Char(Char::Literal(ch))) => Some(*ch),
         _ => None,
     }
 }
