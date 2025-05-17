@@ -178,20 +178,19 @@ fn match_file<T: BufRead>(
         // read した行を指定したパターンとマッチ
         for regex in regexes {
             match regex.is_match(&line) {
-                Ok(is_match) => {
-                    if is_match {
-                        matching_count += 1;
-                        if !is_count {
-                            // -c が指定されたときに、print の処理を飛ばすため。
-                            print(file, &line, i + 1, is_filename, is_line_number);
-                        }
-                        // マッチした場合はループを抜ける。
-                        // 1つのパターンとマッチした時点で、残りのパターンのマッチはしないため。
-                        break;
+                Ok(true) => {
+                    matching_count += 1;
+                    if !is_count {
+                        // -c が指定されたときに、print の処理を飛ばすため。
+                        print(file, &line, i + 1, is_filename, is_line_number);
                     }
+                    // マッチした場合はループを抜ける。
+                    // 1つのパターンとマッチした時点で、残りのパターンのマッチはしないため。
+                    break;
                 }
-                Err(_) => {
-                    // eprintln!("Following error is occured in matching, pattern = '{pattern}', line = '{line}'\n{e}");
+                Ok(false) => continue,
+                Err(e) => {
+                    eprintln!("Following error is occured in matching.\n{e}");
                     return None;
                 }
             }

@@ -122,10 +122,7 @@ fn match_string(
 
 /// 文字列の中から、指定した文字セットの最初のインデックスを取得する
 fn find_index(string: &str, char_set: &BTreeSet<char>) -> Option<usize> {
-    match char_set.first() {
-        Some(ch) => string.find(*ch),
-        None => None,
-    }
+    char_set.iter().map(|ch| string.find(*ch)).min()?
 }
 
 /// 命令列の先頭の命令に対応した文字を取得する
@@ -434,8 +431,8 @@ mod tests {
         let char_set: BTreeSet<char> = ['c', 'e'].iter().cloned().collect();
         assert_eq!(find_index("abcdefg", &char_set), Some(2));
 
-        let char_set: BTreeSet<char> = ['g', 'e'].iter().cloned().collect();
-        assert_eq!(find_index("abcdefg", &char_set), Some(4));
+        let char_set: BTreeSet<char> = ['c', 'e'].iter().cloned().collect();
+        assert_eq!(find_index("gfedcba", &char_set), Some(2));
 
         let char_set: BTreeSet<char> = ['a', 'b', 'c'].iter().cloned().collect();
         assert_eq!(find_index("xyz", &char_set), None);
