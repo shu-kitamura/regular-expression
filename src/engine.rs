@@ -4,6 +4,8 @@ pub mod evaluator;
 pub mod instruction;
 pub mod parser;
 
+use std::collections::BTreeSet;
+
 use crate::{
     engine::{
         compiler::compile,
@@ -74,12 +76,11 @@ pub fn match_line(
         return Ok(match_string(code, line, is_dollar)? ^ is_invert_match);
     }
 
-    // 命令列が Char の場合、
-    // 先頭のリテラルと同じ文字からスタートする場合のみマッチングを行う
-    // match_string の呼び出し回数を削減し、高速化を図るため
-    if let Some(first_ch) = get_first_char(code) {
+    // 先頭リテラルがある場合、最初の文字を取得する
+    let first_chars: BTreeSet<char> = get_first_chars(code);
+    if !first_chars.is_empty() {
         let mut pos = 0;
-        while let Some(i) = line[pos..].find(first_ch) {
+        while let Some(i) = find_index(&line[pos..], &first_chars) {
             let start = pos + i;
 
             is_match = match_string(code, &line[start..], is_dollar)?;
@@ -90,6 +91,7 @@ pub fn match_line(
         }
     } else {
         // 先頭リテラル無し → 旧ループ
+        // ここに到達するのは、最初の命令が Char::Any の場合のみ
         for i in 0..line.len() {
             // abcdefg という文字列の場合、以下のように順にマッチングする。
             //     ループ1 : abcdefg
@@ -118,21 +120,46 @@ fn match_string(
     Ok(match_result)
 }
 
-/// 命令列の最初が Char の場合、最初の文字を取得する
-fn get_first_char(insts: &[Instruction]) -> Option<char> {
-    match insts.first() {
-        Some(Instruction::Char(Char::Literal(ch))) => Some(*ch),
-        _ => None,
+/// 文字列の中から、指定した文字セットの最初のインデックスを取得する
+fn find_index(string: &str, char_set: &BTreeSet<char>) -> Option<usize> {
+    match char_set.first() {
+        Some(ch) => string.find(*ch),
+        None => None,
     }
+}
+
+/// 命令列の先頭の命令に対応した文字を取得する
+/// * Char -> 最初の文字を取得する
+/// * Split -> 分岐先の文字を取得する
+/// * Jump, Match -> 何も取得しない
+fn get_first_chars(insts: &[Instruction]) -> BTreeSet<char> {
+    let mut first_chars: BTreeSet<char> = BTreeSet::new();
+    match insts.first() {
+        Some(Instruction::Char(Char::Literal(ch))) => {
+            first_chars.insert(*ch);
+        }
+        Some(Instruction::Split(left, right)) => {
+            if let Some(Instruction::Char(Char::Literal(ch))) = insts.get(*left) {
+                first_chars.insert(*ch);
+            };
+            if let Some(Instruction::Char(Char::Literal(ch))) = insts.get(*right) {
+                first_chars.insert(*ch);
+            };
+        }
+        _ => {} // Jump や Match になることはないため、何もしない
+    };
+    first_chars
 }
 
 // ----- テストコード・試し -----
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeSet;
+
     use crate::{
         engine::{
-            compile_pattern,
+            compile_pattern, find_index, get_first_chars,
             instruction::{Char, Instruction},
             match_line, match_string, safe_add,
         },
@@ -351,5 +378,69 @@ mod tests {
         // "abc" という文字列をマッチングするテスト
         let actual2: bool = match_line(&insts, "acd", false, false, true).unwrap();
         assert_eq!(actual2, true);
+    }
+
+    #[test]
+    fn test_get_first_chars() {
+        // "abc" のテスト
+        let insts: Vec<Instruction> = vec![
+            Instruction::Char(Char::Literal('a')),
+            Instruction::Char(Char::Literal('b')),
+            Instruction::Char(Char::Literal('c')),
+            Instruction::Match,
+        ];
+        let first_chars = get_first_chars(&insts);
+        assert_eq!(first_chars.len(), 1);
+        assert!(first_chars.contains(&'a'));
+
+        // "a*bc" のテスト
+        let insts: Vec<Instruction> = vec![
+            Instruction::Split(1, 3),
+            Instruction::Char(Char::Literal('a')),
+            Instruction::Jump(0),
+            Instruction::Char(Char::Literal('b')),
+            Instruction::Char(Char::Literal('c')),
+            Instruction::Match,
+        ];
+        let first_chars = get_first_chars(&insts);
+        assert_eq!(first_chars.len(), 2);
+        assert!(first_chars.contains(&'a'));
+        assert!(first_chars.contains(&'b'));
+
+        // 以下のテストは実際にはありえないが、テストのために用意
+
+        // 命令列の先頭が Jump のテスト
+        let insts: Vec<Instruction> = vec![
+            Instruction::Jump(1),
+            Instruction::Char(Char::Literal('a')),
+            Instruction::Char(Char::Literal('b')),
+            Instruction::Match,
+        ];
+        let first_chars = get_first_chars(&insts);
+        assert_eq!(first_chars.len(), 0);
+
+        // 命令列の先頭が Match のテスト
+        let insts: Vec<Instruction> = vec![
+            Instruction::Match,
+            Instruction::Char(Char::Literal('a')),
+            Instruction::Char(Char::Literal('b')),
+        ];
+        let first_chars = get_first_chars(&insts);
+        assert_eq!(first_chars.len(), 0);
+    }
+
+    #[test]
+    fn test_find_index() {
+        let char_set: BTreeSet<char> = ['c', 'e'].iter().cloned().collect();
+        assert_eq!(find_index("abcdefg", &char_set), Some(2));
+
+        let char_set: BTreeSet<char> = ['g', 'e'].iter().cloned().collect();
+        assert_eq!(find_index("abcdefg", &char_set), Some(4));
+
+        let char_set: BTreeSet<char> = ['a', 'b', 'c'].iter().cloned().collect();
+        assert_eq!(find_index("xyz", &char_set), None);
+
+        let char_set: BTreeSet<char> = [].iter().cloned().collect();
+        assert_eq!(find_index("abcdefg", &char_set), None);
     }
 }
