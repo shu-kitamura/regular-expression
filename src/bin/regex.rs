@@ -83,7 +83,7 @@ impl Args {
 }
 
 /// コマンドラインの指定に不正があった場合に出力するエラーの型
-#[derive(Debug, Error)]
+#[derive(Debug, Error, PartialEq)]
 pub enum CommandLineError {
     #[error("CommandLineError : no pattern specified.")]
     NoPattern,
@@ -229,7 +229,11 @@ fn is_print_filename(file_count: usize, no_filename: bool, with_filename: bool) 
 
 #[cfg(test)]
 mod tests {
-    use crate::is_print_filename;
+    use std::{fs::File, io::BufReader};
+
+    use regular_expression::Regex;
+
+    use crate::{is_print_filename, match_file, CommandLineError};
 
     #[test]
     fn test_is_print_filename() {
@@ -245,5 +249,85 @@ mod tests {
         assert_eq!(is_print_filename(2, true, false), false);
         // ファイル数が 2(≒ 2以上) で、-H オプションあり
         assert_eq!(is_print_filename(2, false, true), true);
+    }
+
+    #[test]
+    fn test_get_patterns() {
+        // -e オプションなし、位置引数あり
+        let mut args = super::Args {
+            pattern: Some("pattern1".to_string()),
+            files: vec![],
+            patterns: vec![],
+            count: false,
+            ignore_case: false,
+            invert_match: false,
+            no_filename: false,
+            with_filename: false,
+            line_number: false,
+            help: None,
+            version: None,
+        };
+        assert_eq!(args.get_patterns().unwrap(), &vec!["pattern1".to_string()]);
+
+        // -e オプションあり、位置引数あり
+        let mut args = super::Args {
+            pattern: Some("file1".to_string()),
+            files: vec![],
+            patterns: vec!["pattern2".to_string()],
+            count: false,
+            ignore_case: false,
+            invert_match: false,
+            no_filename: false,
+            with_filename: false,
+            line_number: false,
+            help: None,
+            version: None,
+        };
+        let patterns = args.get_patterns().unwrap();
+        assert_eq!(patterns, &vec!["pattern2".to_string()]);
+        assert_eq!(args.files, vec!["file1".to_string()]);
+
+        // -e オプションなし、位置引数なし
+        let mut args = super::Args {
+            pattern: None,
+            files: vec![],
+            patterns: vec![],
+            count: false,
+            ignore_case: false,
+            invert_match: false,
+            no_filename: false,
+            with_filename: false,
+            line_number: false,
+            help: None,
+            version: None,
+        };
+        assert_eq!(args.get_patterns(), Err(CommandLineError::NoPattern));
+    }
+
+    #[test]
+    fn test_match_file() {
+        let file = "./Cargo.toml";
+        let buf_reader: BufReader<File> = match File::open(file) {
+            Ok(reader) => BufReader::new(reader),
+            Err(_) => panic!(),
+        };
+        let regexes: Vec<Regex> = vec![
+            Regex::new("regular-expression", false, false).unwrap(),
+            Regex::new("not match pattern", false, false).unwrap(),
+        ];
+        let args = super::Args {
+            pattern: None,
+            files: vec![],
+            patterns: vec![],
+            count: false,
+            ignore_case: false,
+            invert_match: false,
+            no_filename: false,
+            with_filename: false,
+            line_number: false,
+            help: None,
+            version: None,
+        };
+        assert_eq!(match_file(buf_reader, file, &regexes, &args), Some(1));
     }
 }
