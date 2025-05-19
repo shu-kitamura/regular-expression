@@ -1,4 +1,6 @@
-use engine::instruction::Instruction;
+use std::collections::BTreeSet;
+
+use engine::instruction::{Char, Instruction};
 
 mod engine;
 mod error;
@@ -14,6 +16,7 @@ mod error;
 /// * is_dollar -> 行末からのマッチングをするかどうか
 pub struct Regex {
     code: Vec<Instruction>,
+    first_chars: BTreeSet<char>,
     is_ignore_case: bool,
     is_invert_match: bool,
     is_caret: bool,
@@ -45,8 +48,11 @@ impl Regex {
             engine::compile_pattern(pattern)?
         };
 
+        let first_chars = Self::get_first_chars(&code);
+
         Ok(Regex {
             code,
+            first_chars,
             is_ignore_case,
             is_invert_match,
             is_caret,
@@ -70,6 +76,7 @@ impl Regex {
             // 大小文字を区別しない場合、行を小文字にしてマッチングする
             engine::match_line(
                 &self.code,
+                &self.first_chars,
                 &line.to_lowercase(),
                 self.is_caret,
                 self.is_dollar,
@@ -78,6 +85,7 @@ impl Regex {
         } else {
             engine::match_line(
                 &self.code,
+                &self.first_chars,
                 line,
                 self.is_caret,
                 self.is_dollar,
@@ -85,6 +93,29 @@ impl Regex {
             )?
         };
         Ok(is_match)
+    }
+
+    /// 命令列の先頭の命令に対応した文字を取得する
+    /// * Char -> 最初の文字を取得する
+    /// * Split -> 分岐先の文字を取得する
+    /// * Jump, Match -> 何も取得しない
+    fn get_first_chars(insts: &[Instruction]) -> BTreeSet<char> {
+        let mut first_chars: BTreeSet<char> = BTreeSet::new();
+        match insts.first() {
+            Some(Instruction::Char(Char::Literal(ch))) => {
+                first_chars.insert(*ch);
+            }
+            Some(Instruction::Split(left, right)) => {
+                if let Some(Instruction::Char(Char::Literal(ch))) = insts.get(*left) {
+                    first_chars.insert(*ch);
+                };
+                if let Some(Instruction::Char(Char::Literal(ch))) = insts.get(*right) {
+                    first_chars.insert(*ch);
+                };
+            }
+            _ => {} // Jump や Match になることはないため、何もしない
+        };
+        first_chars
     }
 }
 
@@ -149,5 +180,54 @@ mod tests {
         let line = "abe";
         let result = regex.is_match(line).unwrap();
         assert_eq!(result, true);
+    }
+
+    #[test]
+    fn test_get_first_chars() {
+        // "abc" のテスト
+        let insts: Vec<Instruction> = vec![
+            Instruction::Char(Char::Literal('a')),
+            Instruction::Char(Char::Literal('b')),
+            Instruction::Char(Char::Literal('c')),
+            Instruction::Match,
+        ];
+        let first_chars = Regex::get_first_chars(&insts);
+        assert_eq!(first_chars.len(), 1);
+        assert!(first_chars.contains(&'a'));
+
+        // "a*bc" のテスト
+        let insts: Vec<Instruction> = vec![
+            Instruction::Split(1, 3),
+            Instruction::Char(Char::Literal('a')),
+            Instruction::Jump(0),
+            Instruction::Char(Char::Literal('b')),
+            Instruction::Char(Char::Literal('c')),
+            Instruction::Match,
+        ];
+        let first_chars = Regex::get_first_chars(&insts);
+        assert_eq!(first_chars.len(), 2);
+        assert!(first_chars.contains(&'a'));
+        assert!(first_chars.contains(&'b'));
+
+        // 以下のテストは実際にはありえないが、テストのために用意
+
+        // 命令列の先頭が Jump のテスト
+        let insts: Vec<Instruction> = vec![
+            Instruction::Jump(1),
+            Instruction::Char(Char::Literal('a')),
+            Instruction::Char(Char::Literal('b')),
+            Instruction::Match,
+        ];
+        let first_chars = Regex::get_first_chars(&insts);
+        assert_eq!(first_chars.len(), 0);
+
+        // 命令列の先頭が Match のテスト
+        let insts: Vec<Instruction> = vec![
+            Instruction::Match,
+            Instruction::Char(Char::Literal('a')),
+            Instruction::Char(Char::Literal('b')),
+        ];
+        let first_chars = Regex::get_first_chars(&insts);
+        assert_eq!(first_chars.len(), 0);
     }
 }
