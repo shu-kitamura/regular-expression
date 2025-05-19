@@ -16,7 +16,7 @@ mod error;
 /// * is_dollar -> 行末からのマッチングをするかどうか
 pub struct Regex {
     code: Vec<Instruction>,
-    first_chars: BTreeSet<char>,
+    first_chars: BTreeSet<String>,
     is_ignore_case: bool,
     is_invert_match: bool,
     is_caret: bool,
@@ -48,7 +48,7 @@ impl Regex {
             engine::compile_pattern(pattern)?
         };
 
-        let first_chars = Self::get_first_chars(&code);
+        let first_chars = Self::get_first_strings(&code);
 
         Ok(Regex {
             code,
@@ -93,27 +93,45 @@ impl Regex {
         Ok(is_match ^ self.is_invert_match)
     }
 
-    /// 命令列の先頭の命令に対応した文字を取得する
-    /// * Char -> 最初の文字を取得する
-    /// * Split -> 分岐先の文字を取得する
-    /// * Jump, Match -> 何も取得しない
-    fn get_first_chars(insts: &[Instruction]) -> BTreeSet<char> {
-        let mut first_chars: BTreeSet<char> = BTreeSet::new();
+    fn get_first_strings(insts: &[Instruction]) -> BTreeSet<String> {
+        let mut first_strings: BTreeSet<String> = BTreeSet::new();
         match insts.first() {
-            Some(Instruction::Char(Char::Literal(ch))) => {
-                first_chars.insert(*ch);
+            Some(Instruction::Char(Char::Literal(_))) => {
+                if let Some(string) = Self::get_chars(insts, 0) {
+                    first_strings.insert(string);
+                };
             }
             Some(Instruction::Split(left, right)) => {
-                if let Some(Instruction::Char(Char::Literal(ch))) = insts.get(*left) {
-                    first_chars.insert(*ch);
+                if let Some(string) = Self::get_chars(insts, *left) {
+                    first_strings.insert(string);
                 };
-                if let Some(Instruction::Char(Char::Literal(ch))) = insts.get(*right) {
-                    first_chars.insert(*ch);
+                if let Some(string) = Self::get_chars(insts, *right) {
+                    first_strings.insert(string);
                 };
             }
             _ => {} // Jump や Match になることはないため、何もしない
         };
-        first_chars
+        first_strings
+    }
+
+    fn get_chars(insts: &[Instruction], mut start: usize) -> Option<String> {
+        let mut pre: String = String::new();
+
+        while start < insts.len() {
+            match insts.get(start) {
+                Some(Instruction::Char(Char::Literal(c))) => {
+                    pre.push(*c);
+                    start += 1;
+                }
+                _ => break,
+            }
+        }
+
+        if pre.is_empty() {
+            None
+        } else {
+            Some(pre)
+        }
     }
 }
 
@@ -189,9 +207,9 @@ mod tests {
             Instruction::Char(Char::Literal('c')),
             Instruction::Match,
         ];
-        let first_chars = Regex::get_first_chars(&insts);
+        let first_chars = Regex::get_first_strings(&insts);
         assert_eq!(first_chars.len(), 1);
-        assert!(first_chars.contains(&'a'));
+        assert!(first_chars.get("abc").is_some());
 
         // "a*bc" のテスト
         let insts: Vec<Instruction> = vec![
@@ -202,10 +220,10 @@ mod tests {
             Instruction::Char(Char::Literal('c')),
             Instruction::Match,
         ];
-        let first_chars = Regex::get_first_chars(&insts);
+        let first_chars = Regex::get_first_strings(&insts);
         assert_eq!(first_chars.len(), 2);
-        assert!(first_chars.contains(&'a'));
-        assert!(first_chars.contains(&'b'));
+        assert!(first_chars.contains("a"));
+        assert!(first_chars.contains("bc"));
 
         // 以下のテストは実際にはありえないが、テストのために用意
 
@@ -216,7 +234,7 @@ mod tests {
             Instruction::Char(Char::Literal('b')),
             Instruction::Match,
         ];
-        let first_chars = Regex::get_first_chars(&insts);
+        let first_chars = Regex::get_first_strings(&insts);
         assert_eq!(first_chars.len(), 0);
 
         // 命令列の先頭が Match のテスト
@@ -225,7 +243,7 @@ mod tests {
             Instruction::Char(Char::Literal('a')),
             Instruction::Char(Char::Literal('b')),
         ];
-        let first_chars = Regex::get_first_chars(&insts);
+        let first_chars = Regex::get_first_strings(&insts);
         assert_eq!(first_chars.len(), 0);
     }
 }
