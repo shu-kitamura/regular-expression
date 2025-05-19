@@ -69,12 +69,11 @@ pub fn match_line(
     line: &str,
     is_caret: bool,
     is_dollar: bool,
-    is_invert_match: bool,
 ) -> Result<bool, RegexError> {
     let mut is_match: bool = false;
 
     if is_caret {
-        return Ok(match_string(code, line, is_dollar)? ^ is_invert_match);
+        return match_string(code, line, is_dollar);
     }
 
     // 先頭リテラルがある場合、最初の文字を取得する
@@ -107,7 +106,7 @@ pub fn match_line(
         }
     }
 
-    Ok(is_match ^ is_invert_match)
+    Ok(is_match)
 }
 
 /// 文字列のマッチングを実行する。
@@ -284,11 +283,11 @@ mod tests {
         let first_chars: BTreeSet<char> = BTreeSet::from(['a']);
 
         // "abc" という文字列をマッチングするテスト
-        let actual1: bool = match_line(&insts, &first_chars, "abc", false, false, false).unwrap();
+        let actual1: bool = match_line(&insts, &first_chars, "abc", false, false).unwrap();
         assert_eq!(actual1, true);
 
         // "abe" という文字列をマッチングするテスト
-        let actual2: bool = match_line(&insts, &first_chars, "abe", false, false, false).unwrap();
+        let actual2: bool = match_line(&insts, &first_chars, "abe", false, false).unwrap();
         assert_eq!(actual2, false);
 
         // "a?b" というパターンに対するテスト
@@ -300,7 +299,7 @@ mod tests {
             Instruction::Match,
         ];
         let first_chars: BTreeSet<char> = BTreeSet::from(['a', 'b']);
-        let actual3 = match_line(&insts, &first_chars, "ab", false, false, false).unwrap();
+        let actual3 = match_line(&insts, &first_chars, "ab", false, false).unwrap();
         assert_eq!(actual3, true);
     }
     #[test]
@@ -315,11 +314,11 @@ mod tests {
         let first_chars: BTreeSet<char> = BTreeSet::from(['a']);
 
         // "aab" という文字列をマッチングするテスト
-        let actual1: bool = match_line(&insts, &first_chars, "aab", true, false, false).unwrap();
+        let actual1: bool = match_line(&insts, &first_chars, "aab", true, false).unwrap();
         assert_eq!(actual1, true);
 
         // "xabcd" という文字列をマッチングするテスト
-        let actual2: bool = match_line(&insts, &first_chars, "xabcd", true, false, false).unwrap();
+        let actual2: bool = match_line(&insts, &first_chars, "xabcd", true, false).unwrap();
         assert_eq!(actual2, false);
     }
 
@@ -334,32 +333,12 @@ mod tests {
         let first_chars: BTreeSet<char> = BTreeSet::from(['a']);
 
         // "ab" という文字列をマッチングするテスト
-        let actual1: bool = match_line(&insts, &first_chars, "ab", false, true, false).unwrap();
+        let actual1: bool = match_line(&insts, &first_chars, "ab", false, true).unwrap();
         assert_eq!(actual1, true);
 
         // "abc" という文字列をマッチングするテスト
-        let actual2: bool = match_line(&insts, &first_chars, "abc", false, true, false).unwrap();
+        let actual2: bool = match_line(&insts, &first_chars, "abc", false, true).unwrap();
         assert_eq!(actual2, false);
-    }
-
-    #[test]
-    fn test_match_line_invert() {
-        // "a+b" というパターンに対してのテスト
-        let insts: Vec<Instruction> = vec![
-            Instruction::Char(Char::Literal('a')),
-            Instruction::Split(0, 2),
-            Instruction::Char(Char::Literal('b')),
-            Instruction::Match,
-        ];
-        let first_chars: BTreeSet<char> = BTreeSet::from(['a']);
-
-        // "ab" という文字列をマッチングするテスト
-        let actual1: bool = match_line(&insts, &first_chars, "abc", false, false, true).unwrap();
-        assert_eq!(actual1, false);
-
-        // "abc" という文字列をマッチングするテスト
-        let actual2: bool = match_line(&insts, &first_chars, "acd", false, false, true).unwrap();
-        assert_eq!(actual2, true);
     }
 
     #[test]

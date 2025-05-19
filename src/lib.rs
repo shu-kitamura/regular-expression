@@ -80,7 +80,6 @@ impl Regex {
                 &line.to_lowercase(),
                 self.is_caret,
                 self.is_dollar,
-                self.is_invert_match,
             )?
         } else {
             engine::match_line(
@@ -89,10 +88,9 @@ impl Regex {
                 line,
                 self.is_caret,
                 self.is_dollar,
-                self.is_invert_match,
             )?
         };
-        Ok(is_match)
+        Ok(is_match ^ self.is_invert_match)
     }
 
     /// 命令列の先頭の命令に対応した文字を取得する
