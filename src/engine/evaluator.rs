@@ -26,11 +26,7 @@ fn eval_char(inst: &Char, string: &str, index: usize) -> bool {
 
 /// プログラムカウンタとchar配列のインデックスをインクリメントする
 fn increment_pc_and_index(pc: &mut usize, index: &mut usize) -> Result<(), EvalError> {
-    match safe_add(pc, &1, || EvalError::PCOverFlow) {
-        Ok(()) => {}
-        Err(e) => return Err(e),
-    };
-
+    safe_add(pc, &1, || EvalError::PCOverFlow)?;
     safe_add(index, &1, || EvalError::CharIndexOverFlow)
 }
 
