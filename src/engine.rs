@@ -301,6 +301,18 @@ mod tests {
         let first_chars: BTreeSet<String> = ["ab", "b"].iter().map(|s| s.to_string()).collect();
         let actual3 = match_line(&insts, &first_chars, "ab", false, false).unwrap();
         assert_eq!(actual3, true);
+
+        // ".abc" というパターンに対するテスト
+        let insts = vec![
+            Instruction::Char(Char::Any),
+            Instruction::Char(Char::Literal('a')),
+            Instruction::Char(Char::Literal('b')),
+            Instruction::Char(Char::Literal('c')),
+            Instruction::Match,
+        ];
+        let first_chars: BTreeSet<String> = BTreeSet::new();
+        let actual4 = match_line(&insts, &first_chars, "xxxabc", false, false).unwrap();
+        assert_eq!(actual4, true);
     }
 
     #[test]
