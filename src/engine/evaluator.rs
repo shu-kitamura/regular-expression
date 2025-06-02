@@ -12,16 +12,15 @@ use crate::{
 
 /// char と Instruction を評価する
 fn eval_char(inst: &Char, string: &str, index: usize) -> bool {
-    // 文字列の長さが index より小さい場合、範囲外アクセスになるため、false を返す
     let inst_char = match inst {
         Char::Literal(c) => *c,
         Char::Any => return true,
     };
 
-    match string.chars().nth(index) {
-        Some(c) => c == inst_char,
-        None => false,
-    }
+    string
+        .chars()
+        .nth(index)
+        .map_or(false, |c| c == inst_char)
 }
 
 /// プログラムカウンタとchar配列のインデックスをインクリメントする
@@ -65,7 +64,7 @@ fn eval_depth(
             Instruction::Jump(addr) => p_counter = *addr,
             Instruction::Split(addr1, addr2) => {
                 // すでに訪れた状態の場合、無限ループを避けるために false を返す
-                if !visited.insert((*addr1, char_index)) {
+                if is_visited(visited, *addr1, char_index) {
                     return Ok(false);
                 }
 
@@ -99,6 +98,13 @@ fn eval_depth(
 pub fn eval(inst: &[Instruction], string: &str, is_end_dollar: bool) -> Result<bool, EvalError> {
     let mut visited = HashSet::new();
     eval_depth(inst, string, 0, 0, is_end_dollar, &mut visited)
+}
+
+fn is_visited(visited: &mut HashSet<(usize, usize)>, addr: usize, char_index: usize) -> bool {
+    if addr <= char_index {
+        return !visited.insert((addr, char_index))
+    }
+    false
 }
 
 // ----- テストコード -----
