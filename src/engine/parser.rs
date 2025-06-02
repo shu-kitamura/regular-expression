@@ -96,22 +96,15 @@ pub fn parse(pattern: &str) -> Result<Ast, ParseError> {
     for (pos, c) in pattern.chars().enumerate() {
         if is_escape {
             is_escape = false;
-            match parse_escape(pos, c) {
-                Ok(ast) => {
-                    seq.push(ast);
-                    continue;
-                }
-                Err(e) => return Err(e),
-            };
+            seq.push(parse_escape(pos, c)?);
+            continue;
         }
+
         match c {
             '+' | '*' | '?' => {
-                if let Some(prev_ast) = seq.pop() {
-                    let ast: Ast = parse_qualifier(c, prev_ast);
-                    seq.push(ast);
-                } else {
-                    return Err(ParseError::NoPrev(pos));
-                }
+                let prev_ast: Ast = seq.pop().ok_or(ParseError::NoPrev(pos))?;
+                let ast: Ast = parse_qualifier(c, prev_ast);
+                seq.push(ast);
             }
             '(' => {
                 let prev: Vec<Ast> = take(&mut seq);
@@ -119,20 +112,17 @@ pub fn parse(pattern: &str) -> Result<Ast, ParseError> {
                 stack.push((prev, prev_or));
             }
             ')' => {
-                if let Some((mut prev, prev_or)) = stack.pop() {
-                    if !seq.is_empty() {
-                        seq_or.push(Ast::Seq(seq));
-                    }
-
-                    if let Some(ast) = fold_or(seq_or) {
-                        prev.push(ast);
-                    }
-
-                    seq = prev;
-                    seq_or = prev_or;
-                } else {
-                    return Err(ParseError::InvalidRightParen(pos));
+                let (mut prev, prev_or) = stack.pop().ok_or(ParseError::InvalidRightParen(pos))?;
+                if !seq.is_empty() {
+                    seq_or.push(Ast::Seq(seq));
                 }
+
+                if let Some(ast) = fold_or(seq_or) {
+                    prev.push(ast);
+                }
+
+                seq = prev;
+                seq_or = prev_or;
             }
             '|' => {
                 let prev: Vec<Ast> = take(&mut seq);

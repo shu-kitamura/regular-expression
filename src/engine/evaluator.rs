@@ -17,10 +17,7 @@ fn eval_char(inst: &Char, string: &str, index: usize) -> bool {
         Char::Any => return true,
     };
 
-    string
-        .chars()
-        .nth(index)
-        .map_or(false, |c| c == inst_char)
+    string.chars().nth(index) == Some(inst_char)
 }
 
 /// プログラムカウンタとchar配列のインデックスをインクリメントする
@@ -102,7 +99,7 @@ pub fn eval(inst: &[Instruction], string: &str, is_end_dollar: bool) -> Result<b
 
 fn is_visited(visited: &mut HashSet<(usize, usize)>, addr: usize, char_index: usize) -> bool {
     if addr <= char_index {
-        return !visited.insert((addr, char_index))
+        return !visited.insert((addr, char_index));
     }
     false
 }
