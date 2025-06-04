@@ -61,7 +61,7 @@ fn eval_depth(
             Instruction::Jump(addr) => p_counter = *addr,
             Instruction::Split(addr1, addr2) => {
                 // すでに訪れた状態の場合、無限ループを避けるために false を返す
-                if is_visited(visited, *addr1, char_index) {
+                if !visited.insert((*addr1, char_index)) {
                     return Ok(false);
                 }
 
@@ -95,13 +95,6 @@ fn eval_depth(
 pub fn eval(inst: &[Instruction], string: &str, is_end_dollar: bool) -> Result<bool, EvalError> {
     let mut visited = HashSet::new();
     eval_depth(inst, string, 0, 0, is_end_dollar, &mut visited)
-}
-
-fn is_visited(visited: &mut HashSet<(usize, usize)>, addr: usize, char_index: usize) -> bool {
-    if addr <= char_index {
-        return !visited.insert((addr, char_index));
-    }
-    false
 }
 
 // ----- テストコード -----
