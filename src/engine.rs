@@ -78,14 +78,17 @@ pub fn match_line(
 
     // 先頭リテラルがある場合、最初の文字を取得する
     if !first_strings.is_empty() {
-        for i in find_index(line, first_strings).flatten() {
-            // 先頭リテラルが見つかった場合、そこからマッチングを開始する
-            is_match = match_string(code, &line[i..], is_dollar)?;
+        let mut pos = 0;
+        while let Some(i) = find_index(&line[pos..], first_strings) {
+            let start = pos + i;
+
+            is_match = match_string(code, &line[start..], is_dollar)?;
             if is_match {
-                break;
+                break
             }
+            pos = start + 1;
         }
-    } else {
+    } else { 
         // 先頭リテラル無し → 旧ループ
         // ここに到達するのは、最初の命令が Char::Any の場合のみ
         for i in 0..line.len() {
@@ -117,23 +120,10 @@ fn match_string(
 }
 
 fn find_index<'a>(
-    string: &'a str,
-    string_set: &'a BTreeSet<String>,
-) -> impl Iterator<Item = Option<usize>> + 'a {
-    string_set
-        .iter()
-        .flat_map(move |pattern| {
-            let mut start = 0;
-            std::iter::from_fn(move || {
-                if let Some(pos) = string[start..].find(pattern) {
-                    let absolute_pos = start + pos;
-                    start = absolute_pos + 1; // 次の検索開始位置を更新
-                    Some(Some(absolute_pos))
-                } else {
-                    None
-                }
-            })
-        })
+    string: &str,
+    string_set: &BTreeSet<String>,
+) -> Option<usize> {
+    string_set.iter().map(|s| string.find(s)).filter(|opt| opt.is_some()).min()?
 }
 
 // ----- テストコード・試し -----
@@ -144,7 +134,7 @@ mod tests {
 
     use crate::{
         engine::{
-            compile_pattern, find_index,
+            compile_pattern,
             instruction::{Char, Instruction},
             match_line, match_string, safe_add,
         },
@@ -363,52 +353,5 @@ mod tests {
         // "abc" という文字列をマッチングするテスト
         let actual2: bool = match_line(&insts, &first_strings, "abc", false, true).unwrap();
         assert_eq!(actual2, false);
-    }
-
-    #[test]
-    fn test_find_index() {
-        // 基本的なテスト: 複数のパターンが見つかる場合
-        let string_set: BTreeSet<String> = ["c", "e"].iter().map(|s| s.to_string()).collect();
-        let results: Vec<Option<usize>> = find_index("abcdefg", &string_set).collect();
-
-        // 結果をソートして比較（イテレータの順序は保証されないため）
-        let mut expected = vec![Some(2), Some(4)]; // "c"の位置2, "e"の位置4
-        let mut actual = results;
-        expected.sort();
-        actual.sort();
-        assert_eq!(actual, expected);
-    }
-
-    #[test]
-    fn test_find_index_partial_match() {
-        // 一部のパターンのみが見つかる場合
-        let string_set: BTreeSet<String> = ["c", "x", "e"].iter().map(|s| s.to_string()).collect();
-        let results: Vec<Option<usize>> = find_index("abcdefg", &string_set).collect();
-
-        // "x"は見つからないので、"c"と"e"のみ
-        let mut expected = vec![Some(2), Some(4)];
-        let mut actual = results;
-        expected.sort();
-        actual.sort();
-        assert_eq!(actual, expected);
-    }
-
-    #[test]
-    fn test_find_index_no_match() {
-        // マッチするパターンがない場合
-        let string_set: BTreeSet<String> = ["x", "y", "z"].iter().map(|s| s.to_string()).collect();
-        let results: Vec<Option<usize>> = find_index("abcdefg", &string_set).collect();
-
-        // 何も見つからないので空のベクタ
-        assert_eq!(results, vec![]);
-    }
-
-    #[test]
-    fn test_find_index____() {
-        let set = BTreeSet::from(["E".to_string()]);
-        let results: Vec<Option<usize>> = find_index("EXUUEI6oE", &set).collect();
-        assert!(results.contains(&Some(0)));
-        assert!(results.contains(&Some(4)));
-        assert!(results.contains(&Some(8)));
     }
 }

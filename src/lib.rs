@@ -150,12 +150,12 @@ mod tests {
         // "abc" という文字列に対して、マッチングを実行
         let line = "abc";
         let result = regex.is_match(line).unwrap();
-        assert_eq!(result, true);
+        assert!(result);
 
         // "abe" という文字列に対して、マッチングを実行
         let line = "abe";
         let result = regex.is_match(line).unwrap();
-        assert_eq!(result, false);
+        assert!(!result);
     }
 
     #[test]
@@ -168,7 +168,7 @@ mod tests {
         // "ABC" という文字列に対して、マッチングを実行
         let line = "ABC";
         let result = regex1.is_match(line).unwrap();
-        assert_eq!(result, true);
+        assert!(result);
 
         // パターン "ab(c|d)" から Regex 構造体を生成
         // is_ignore_case を false に設定
@@ -178,7 +178,7 @@ mod tests {
         // "ABC" という文字列に対して、マッチングを実行
         let line = "ABC";
         let result = regex2.is_match(line).unwrap();
-        assert_eq!(result, false);
+        assert!(!result);
     }
 
     #[test]
@@ -190,12 +190,12 @@ mod tests {
         // "abc" という文字列に対して、マッチングを実行
         let line = "abc";
         let result = regex.is_match(line).unwrap();
-        assert_eq!(result, false);
+        assert!(!result);
 
         // "abe" という文字列に対して、マッチングを実行
         let line = "abe";
         let result = regex.is_match(line).unwrap();
-        assert_eq!(result, true);
+        assert!(result);
     }
 
     #[test]
@@ -254,6 +254,6 @@ mod tests {
         let insts = regex.code;
         let first_strings = Regex::get_first_strings(&insts);
         assert_eq!(first_strings.len(), 1);
-        assert_eq!(first_strings.contains("E"), true)
+        assert!(first_strings.contains("E"))
     }
 }
