@@ -119,11 +119,15 @@ fn match_string(
     Ok(match_result)
 }
 
-fn find_index<'a>(
+fn find_index(
     string: &str,
     string_set: &BTreeSet<String>,
 ) -> Option<usize> {
-    string_set.iter().map(|s| string.find(s)).filter(|opt| opt.is_some()).min()?
+    string_set
+        .iter()
+        .map(|s| string.find(s))
+        .filter(|opt| opt.is_some())
+        .min()?
 }
 
 // ----- テストコード・試し -----
