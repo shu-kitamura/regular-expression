@@ -65,7 +65,7 @@ pub fn compile_pattern(mut pattern: &str) -> Result<(Vec<Instruction>, bool, boo
 /// パターンと文字列のマッチングを実行する
 pub fn match_line(
     code: &[Instruction],
-    first_chars: &BTreeSet<String>,
+    first_strings: &BTreeSet<String>,
     line: &str,
     is_caret: bool,
     is_dollar: bool,
@@ -77,8 +77,8 @@ pub fn match_line(
     }
 
     // 先頭リテラルがある場合、最初の文字を取得する
-    if !first_chars.is_empty() {
-        for i in find_index(line, first_chars).flatten() {
+    if !first_strings.is_empty() {
+        for i in find_index(line, first_strings).flatten() {
             // 先頭リテラルが見つかった場合、そこからマッチングを開始する
             is_match = match_string(code, &line[i..], is_dollar)?;
             if is_match {
@@ -118,12 +118,22 @@ fn match_string(
 
 fn find_index<'a>(
     string: &'a str,
-    char_set: &'a BTreeSet<String>,
+    string_set: &'a BTreeSet<String>,
 ) -> impl Iterator<Item = Option<usize>> + 'a {
-    char_set
+    string_set
         .iter()
-        .map(|ch| string.find(ch))
-        .filter(|opt| opt.is_some())
+        .flat_map(move |pattern| {
+            let mut start = 0;
+            std::iter::from_fn(move || {
+                if let Some(pos) = string[start..].find(pattern) {
+                    let absolute_pos = start + pos;
+                    start = absolute_pos + 1; // 次の検索開始位置を更新
+                    Some(Some(absolute_pos))
+                } else {
+                    None
+                }
+            })
+        })
 }
 
 // ----- テストコード・試し -----
@@ -282,14 +292,14 @@ mod tests {
             Instruction::Char(Char::Literal('d')),
             Instruction::Match,
         ];
-        let first_chars: BTreeSet<String> = ["ab"].iter().map(|s| s.to_string()).collect();
+        let first_strings: BTreeSet<String> = ["ab"].iter().map(|s| s.to_string()).collect();
 
         // "abc" という文字列をマッチングするテスト
-        let actual1: bool = match_line(&insts, &first_chars, "abc", false, false).unwrap();
+        let actual1: bool = match_line(&insts, &first_strings, "abc", false, false).unwrap();
         assert_eq!(actual1, true);
 
         // "abe" という文字列をマッチングするテスト
-        let actual2: bool = match_line(&insts, &first_chars, "abe", false, false).unwrap();
+        let actual2: bool = match_line(&insts, &first_strings, "abe", false, false).unwrap();
         assert_eq!(actual2, false);
 
         // "a?b" というパターンに対するテスト
@@ -300,8 +310,8 @@ mod tests {
             Instruction::Char(Char::Literal('b')),
             Instruction::Match,
         ];
-        let first_chars: BTreeSet<String> = ["ab", "b"].iter().map(|s| s.to_string()).collect();
-        let actual3 = match_line(&insts, &first_chars, "ab", false, false).unwrap();
+        let first_strings: BTreeSet<String> = ["ab", "b"].iter().map(|s| s.to_string()).collect();
+        let actual3 = match_line(&insts, &first_strings, "ab", false, false).unwrap();
         assert_eq!(actual3, true);
 
         // ".abc" というパターンに対するテスト
@@ -312,8 +322,8 @@ mod tests {
             Instruction::Char(Char::Literal('c')),
             Instruction::Match,
         ];
-        let first_chars: BTreeSet<String> = BTreeSet::new();
-        let actual4 = match_line(&insts, &first_chars, "xxxabc", false, false).unwrap();
+        let first_strings: BTreeSet<String> = BTreeSet::new();
+        let actual4 = match_line(&insts, &first_strings, "xxxabc", false, false).unwrap();
         assert_eq!(actual4, true);
     }
 
@@ -326,14 +336,14 @@ mod tests {
             Instruction::Char(Char::Literal('b')),
             Instruction::Match,
         ];
-        let first_chars: BTreeSet<String> = ["a"].iter().map(|s| s.to_string()).collect();
+        let first_strings: BTreeSet<String> = ["a"].iter().map(|s| s.to_string()).collect();
 
         // "aab" という文字列をマッチングするテスト
-        let actual1: bool = match_line(&insts, &first_chars, "aab", true, false).unwrap();
+        let actual1: bool = match_line(&insts, &first_strings, "aab", true, false).unwrap();
         assert_eq!(actual1, true);
 
         // "xabcd" という文字列をマッチングするテスト
-        let actual2: bool = match_line(&insts, &first_chars, "xabcd", true, false).unwrap();
+        let actual2: bool = match_line(&insts, &first_strings, "xabcd", true, false).unwrap();
         assert_eq!(actual2, false);
     }
 
@@ -345,21 +355,21 @@ mod tests {
             Instruction::Char(Char::Literal('b')),
             Instruction::Match,
         ];
-        let first_chars: BTreeSet<String> = ["a"].iter().map(|s| s.to_string()).collect();
+        let first_strings: BTreeSet<String> = ["a"].iter().map(|s| s.to_string()).collect();
         // "ab" という文字列をマッチングするテスト
-        let actual1: bool = match_line(&insts, &first_chars, "ab", false, true).unwrap();
+        let actual1: bool = match_line(&insts, &first_strings, "ab", false, true).unwrap();
         assert_eq!(actual1, true);
 
         // "abc" という文字列をマッチングするテスト
-        let actual2: bool = match_line(&insts, &first_chars, "abc", false, true).unwrap();
+        let actual2: bool = match_line(&insts, &first_strings, "abc", false, true).unwrap();
         assert_eq!(actual2, false);
     }
 
     #[test]
     fn test_find_index() {
         // 基本的なテスト: 複数のパターンが見つかる場合
-        let char_set: BTreeSet<String> = ["c", "e"].iter().map(|s| s.to_string()).collect();
-        let results: Vec<Option<usize>> = find_index("abcdefg", &char_set).collect();
+        let string_set: BTreeSet<String> = ["c", "e"].iter().map(|s| s.to_string()).collect();
+        let results: Vec<Option<usize>> = find_index("abcdefg", &string_set).collect();
 
         // 結果をソートして比較（イテレータの順序は保証されないため）
         let mut expected = vec![Some(2), Some(4)]; // "c"の位置2, "e"の位置4
@@ -372,8 +382,8 @@ mod tests {
     #[test]
     fn test_find_index_partial_match() {
         // 一部のパターンのみが見つかる場合
-        let char_set: BTreeSet<String> = ["c", "x", "e"].iter().map(|s| s.to_string()).collect();
-        let results: Vec<Option<usize>> = find_index("abcdefg", &char_set).collect();
+        let string_set: BTreeSet<String> = ["c", "x", "e"].iter().map(|s| s.to_string()).collect();
+        let results: Vec<Option<usize>> = find_index("abcdefg", &string_set).collect();
 
         // "x"は見つからないので、"c"と"e"のみ
         let mut expected = vec![Some(2), Some(4)];
@@ -386,10 +396,19 @@ mod tests {
     #[test]
     fn test_find_index_no_match() {
         // マッチするパターンがない場合
-        let char_set: BTreeSet<String> = ["x", "y", "z"].iter().map(|s| s.to_string()).collect();
-        let results: Vec<Option<usize>> = find_index("abcdefg", &char_set).collect();
+        let string_set: BTreeSet<String> = ["x", "y", "z"].iter().map(|s| s.to_string()).collect();
+        let results: Vec<Option<usize>> = find_index("abcdefg", &string_set).collect();
 
         // 何も見つからないので空のベクタ
         assert_eq!(results, vec![]);
+    }
+
+    #[test]
+    fn test_find_index____() {
+        let set = BTreeSet::from(["E".to_string()]);
+        let results: Vec<Option<usize>> = find_index("EXUUEI6oE", &set).collect();
+        assert!(results.contains(&Some(0)));
+        assert!(results.contains(&Some(4)));
+        assert!(results.contains(&Some(8)));
     }
 }
