@@ -9,6 +9,9 @@ edition = "2021"
 clap = { version = "4.5.11", features = ["derive"] }
 thiserror = "1.0"
 
+[dev-dependencies]
+tempfile = "3.0"
+
 [[bin]]
 name = "regex"
 path = "src/bin/regex.rs"

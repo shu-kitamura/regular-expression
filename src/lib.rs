@@ -256,4 +256,178 @@ mod tests {
         assert_eq!(first_strings.len(), 1);
         assert!(first_strings.contains("E"))
     }
+
+    #[test]
+    fn test_regex_new_error_cases() {
+        // 不正なパターンのテスト
+        let result = Regex::new("(", false, false);
+        assert!(result.is_err());
+
+        let result = Regex::new(")", false, false);
+        assert!(result.is_err());
+
+        let result = Regex::new("*", false, false);
+        assert!(result.is_err());
+
+        let result = Regex::new("+", false, false);
+        assert!(result.is_err());
+
+        let result = Regex::new("?", false, false);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_complex_patterns() {
+        // より複雑なパターンのテスト
+        let regex = Regex::new("a(b|c)*d", false, false).unwrap();
+        assert!(regex.is_match("ad").unwrap());
+        assert!(regex.is_match("abd").unwrap());
+        assert!(regex.is_match("acd").unwrap());
+        assert!(regex.is_match("abcd").unwrap());
+        assert!(regex.is_match("abcbcbd").unwrap());
+        assert!(!regex.is_match("ae").unwrap());
+    }
+
+    #[test]
+    fn test_anchor_patterns() {
+        // アンカーパターンのテスト
+        let regex_start = Regex::new("^hello", false, false).unwrap();
+        assert!(regex_start.is_match("hello world").unwrap());
+        assert!(!regex_start.is_match("say hello").unwrap());
+
+        let regex_end = Regex::new("world$", false, false).unwrap();
+        assert!(regex_end.is_match("hello world").unwrap());
+        assert!(!regex_end.is_match("world peace").unwrap());
+
+        let regex_both = Regex::new("^hello$", false, false).unwrap();
+        assert!(regex_both.is_match("hello").unwrap());
+        assert!(!regex_both.is_match("hello world").unwrap());
+        assert!(!regex_both.is_match("say hello").unwrap());
+    }
+
+    #[test]
+    fn test_empty_and_special_strings() {
+        // 実際の動作に基づいたテスト
+        
+        // a+パターンのテスト（1個以上のa）
+        let regex_plus = Regex::new("a+", false, false).unwrap();
+        assert!(!regex_plus.is_match("").unwrap());
+        assert!(regex_plus.is_match("a").unwrap());
+        assert!(regex_plus.is_match("aaa").unwrap());
+        assert!(regex_plus.is_match("baaac").unwrap()); // 文字列内にaが含まれている
+        
+        // 空文字列パターンのテスト - エラーになることを確認
+        let result_empty = Regex::new("", false, false);
+        assert!(result_empty.is_err()); // 空パターンはエラーになる
+        
+        // より具体的なパターンのテスト
+        let regex_literal = Regex::new("abc", false, false).unwrap();
+        assert!(regex_literal.is_match("abc").unwrap());
+        assert!(regex_literal.is_match("xabcy").unwrap()); // 部分マッチ
+        assert!(!regex_literal.is_match("ab").unwrap());
+        assert!(!regex_literal.is_match("def").unwrap());
+        
+        // ドット（任意文字）のテスト
+        let regex_dot = Regex::new("a.c", false, false).unwrap();
+        assert!(regex_dot.is_match("abc").unwrap());
+        assert!(regex_dot.is_match("axc").unwrap());
+        assert!(regex_dot.is_match("a1c").unwrap());
+        assert!(!regex_dot.is_match("ac").unwrap());
+    }
+
+    #[test]
+    fn test_case_sensitivity_edge_cases() {
+        // 大文字小文字の境界ケース
+        let regex_sensitive = Regex::new("Hello", false, false).unwrap();
+        assert!(regex_sensitive.is_match("Hello").unwrap());
+        assert!(!regex_sensitive.is_match("hello").unwrap());
+        assert!(!regex_sensitive.is_match("HELLO").unwrap());
+
+        let regex_insensitive = Regex::new("Hello", true, false).unwrap();
+        assert!(regex_insensitive.is_match("Hello").unwrap());
+        assert!(regex_insensitive.is_match("hello").unwrap());
+        assert!(regex_insensitive.is_match("HELLO").unwrap());
+        assert!(regex_insensitive.is_match("hELLo").unwrap());
+    }
+
+    #[test]
+    fn test_invert_match_combinations() {
+        // 反転マッチの組み合わせテスト
+        let regex_normal = Regex::new("test", false, false).unwrap();
+        let regex_invert = Regex::new("test", false, true).unwrap();
+
+        assert!(regex_normal.is_match("test").unwrap());
+        assert!(!regex_invert.is_match("test").unwrap());
+
+        assert!(!regex_normal.is_match("other").unwrap());
+        assert!(regex_invert.is_match("other").unwrap());
+
+        // 大文字小文字無視 + 反転
+        let regex_ignore_invert = Regex::new("TEST", true, true).unwrap();
+        assert!(!regex_ignore_invert.is_match("test").unwrap());
+        assert!(!regex_ignore_invert.is_match("TEST").unwrap());
+        assert!(regex_ignore_invert.is_match("other").unwrap());
+    }
+
+    #[test]
+    fn test_get_first_strings_edge_cases() {
+        // get_first_strings の境界ケース
+
+        // AnyChar で始まるパターン
+        let insts: Vec<Instruction> = vec![
+            Instruction::Char(Char::Any),
+            Instruction::Char(Char::Literal('a')),
+            Instruction::Match,
+        ];
+        let first_strings = Regex::get_first_strings(&insts);
+        assert_eq!(first_strings.len(), 0);
+
+        // 空の命令列
+        let insts: Vec<Instruction> = vec![];
+        let first_strings = Regex::get_first_strings(&insts);
+        assert_eq!(first_strings.len(), 0);
+
+        // Split で始まり、両方の分岐が Literal
+        let insts: Vec<Instruction> = vec![
+            Instruction::Split(1, 3),
+            Instruction::Char(Char::Literal('a')),
+            Instruction::Jump(5),
+            Instruction::Char(Char::Literal('b')),
+            Instruction::Char(Char::Literal('c')),
+            Instruction::Match,
+        ];
+        let first_strings = Regex::get_first_strings(&insts);
+        assert_eq!(first_strings.len(), 2);
+        assert!(first_strings.contains("a"));
+        assert!(first_strings.contains("bc"));
+    }
+
+    #[test]
+    fn test_get_string_edge_cases() {
+        // get_string の境界ケース
+
+        // 範囲外のインデックス
+        let insts: Vec<Instruction> = vec![
+            Instruction::Char(Char::Literal('a')),
+            Instruction::Match,
+        ];
+        let result = Regex::get_string(&insts, 10);
+        assert_eq!(result, None);
+
+        // Literal以外の命令で始まる
+        let insts: Vec<Instruction> = vec![
+            Instruction::Match,
+            Instruction::Char(Char::Literal('a')),
+        ];
+        let result = Regex::get_string(&insts, 0);
+        assert_eq!(result, None);
+
+        // 単一のLiteral文字
+        let insts: Vec<Instruction> = vec![
+            Instruction::Char(Char::Literal('x')),
+            Instruction::Match,
+        ];
+        let result = Regex::get_string(&insts, 0);
+        assert_eq!(result, Some("x".to_string()));
+    }
 }
