@@ -151,7 +151,7 @@ pub fn parse(pattern: &str) -> Result<Ast, ParseError> {
     }
 }
 
-// ----- テストコード・試し -----
+// ----- テストコード -----
 
 #[cfg(test)]
 mod tests {

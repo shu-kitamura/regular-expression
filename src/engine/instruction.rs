@@ -33,7 +33,7 @@ impl Display for Instruction {
     }
 }
 
-// ----- テストコード・試し -----
+// ----- テストコード -----
 
 #[cfg(test)]
 mod tests {
