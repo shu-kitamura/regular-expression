@@ -24,4 +24,4 @@ Cargo.lock
 
 /target
 lcov.info
-.agent.md
+\.agent.md
