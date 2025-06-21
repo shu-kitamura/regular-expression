@@ -228,8 +228,7 @@ mod tests {
     #[test]
     fn test_fold_or_if_false() {
         // 長さ 1 の配列を準備
-        let mut seq: Vec<Ast> = Vec::new();
-        seq.push(Ast::Char('a'));
+        let seq: Vec<Ast> = vec![Ast::Char('a')];
 
         let expect: Ast = Ast::Char('a');
 

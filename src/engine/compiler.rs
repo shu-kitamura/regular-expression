@@ -322,7 +322,7 @@ mod tests {
         // インデックス 0 の Split 命令の右側アドレスを更新する
         let result = compiler.update_instruction_address(0, CompileError::FailOr);
         assert!(result.is_ok());
-        if let Some(Instruction::Split(_, right)) = compiler.instructions.get(0) {
+        if let Some(Instruction::Split(_, right)) = compiler.instructions.first() {
             assert_eq!(*right, 42);
         }
 
