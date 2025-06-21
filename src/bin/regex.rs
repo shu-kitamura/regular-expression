@@ -238,17 +238,17 @@ mod tests {
     #[test]
     fn test_is_print_filename() {
         // ファイル数が 1 で、オプションなし
-        assert_eq!(is_print_filename(1, false, false), false);
+        assert!(!is_print_filename(1, false, false));
         // ファイル数が 1 で、-h オプションあり
-        assert_eq!(is_print_filename(1, true, false), false);
+        assert!(!is_print_filename(1, true, false));
         // ファイル数が 1 で、-H オプションあり
-        assert_eq!(is_print_filename(1, false, true), true);
+        assert!(is_print_filename(1, false, true));
         // ファイル数が 2(≒ 2以上) で、オプションなし
-        assert_eq!(is_print_filename(2, false, false), true);
+        assert!(is_print_filename(2, false, false));
         // ファイル数が 2(≒ 2以上) で、-h オプションあり
-        assert_eq!(is_print_filename(2, true, false), false);
+        assert!(!is_print_filename(2, true, false));
         // ファイル数が 2(≒ 2以上) で、-H オプションあり
-        assert_eq!(is_print_filename(2, false, true), true);
+        assert!(is_print_filename(2, false, true));
     }
 
     #[test]
@@ -334,14 +334,12 @@ mod tests {
     #[test]
     fn test_match_file_with_count() {
         use std::io::Cursor;
-        
+
         let test_data = "apple\nbanana\napple pie\ncherry\napple tart\n";
         let cursor = Cursor::new(test_data.as_bytes());
         let buf_reader = BufReader::new(cursor);
-        
-        let regexes: Vec<Regex> = vec![
-            Regex::new("apple", false, false).unwrap(),
-        ];
+
+        let regexes: Vec<Regex> = vec![Regex::new("apple", false, false).unwrap()];
         let args = super::Args {
             pattern: None,
             files: vec![],
@@ -361,14 +359,12 @@ mod tests {
     #[test]
     fn test_match_file_with_line_numbers() {
         use std::io::Cursor;
-        
+
         let test_data = "first line\nsecond line\nthird line\n";
         let cursor = Cursor::new(test_data.as_bytes());
         let buf_reader = BufReader::new(cursor);
-        
-        let regexes: Vec<Regex> = vec![
-            Regex::new("line", false, false).unwrap(),
-        ];
+
+        let regexes: Vec<Regex> = vec![Regex::new("line", false, false).unwrap()];
         let args = super::Args {
             pattern: None,
             files: vec![],
@@ -388,14 +384,12 @@ mod tests {
     #[test]
     fn test_match_file_with_filename() {
         use std::io::Cursor;
-        
+
         let test_data = "test content\n";
         let cursor = Cursor::new(test_data.as_bytes());
         let buf_reader = BufReader::new(cursor);
-        
-        let regexes: Vec<Regex> = vec![
-            Regex::new("test", false, false).unwrap(),
-        ];
+
+        let regexes: Vec<Regex> = vec![Regex::new("test", false, false).unwrap()];
         let args = super::Args {
             pattern: None,
             files: vec!["file1".to_string(), "file2".to_string()], // 複数ファイル
@@ -415,16 +409,14 @@ mod tests {
     #[test]
     fn test_match_file_regex_error() {
         use std::io::Cursor;
-        
+
         let test_data = "test content\n";
         let cursor = Cursor::new(test_data.as_bytes());
         let buf_reader = BufReader::new(cursor);
-        
+
         // 不正な正規表現を作成するのは困難なので、
         // 代わりに正常なケースをテスト
-        let regexes: Vec<Regex> = vec![
-            Regex::new("test", false, false).unwrap(),
-        ];
+        let regexes: Vec<Regex> = vec![Regex::new("test", false, false).unwrap()];
         let args = super::Args {
             pattern: None,
             files: vec![],
@@ -458,7 +450,10 @@ mod tests {
             version: None,
         };
         let patterns = args.get_patterns().unwrap();
-        assert_eq!(patterns, &vec!["pattern1".to_string(), "pattern2".to_string()]);
+        assert_eq!(
+            patterns,
+            &vec!["pattern1".to_string(), "pattern2".to_string()]
+        );
         assert_eq!(args.files.len(), 0); // ファイルは追加されない
     }
 
@@ -467,43 +462,48 @@ mod tests {
         // print関数の各パターンをテスト
         // 実際の出力をキャプチャするのは困難なので、
         // 関数が正常に呼び出せることを確認
-        
+
         // 各組み合わせで関数を呼び出し
         super::print("test.txt", "test line", 1, true, true);
         super::print("test.txt", "test line", 1, true, false);
         super::print("test.txt", "test line", 1, false, true);
         super::print("test.txt", "test line", 1, false, false);
-        
+
         // エラーが発生しなければテスト成功
-        assert!(true);
     }
 
     #[test]
     fn test_is_print_filename_edge_cases() {
         // ファイル数が0の場合（file_count <= 1なのでwith_filenameの値を返す）
-        assert_eq!(is_print_filename(0, false, false), false);
-        assert_eq!(is_print_filename(0, true, false), false);
-        assert_eq!(is_print_filename(0, false, true), true);
-        
+        assert!(!is_print_filename(0, false, false));
+        assert!(!is_print_filename(0, true, false));
+        assert!(is_print_filename(0, false, true));
+
         // ファイル数が3以上の場合（file_count > 1なので!no_filenameの値を返す）
-        assert_eq!(is_print_filename(3, false, false), true);
-        assert_eq!(is_print_filename(3, true, false), false);
-        assert_eq!(is_print_filename(3, false, true), true);
-        
+        assert!(is_print_filename(3, false, false));
+        assert!(!is_print_filename(3, true, false));
+        assert!(is_print_filename(3, false, true));
+
         // 両方のオプションがtrueの場合
         // file_count <= 1の場合はwith_filenameが優先される
-        assert_eq!(is_print_filename(1, true, true), true); // with_filenameが優先
-        // file_count > 1の場合は!no_filenameが評価される（no_filename=trueなので!true=false）
-        assert_eq!(is_print_filename(2, true, true), false); // !no_filenameが評価される
+        assert!(is_print_filename(1, true, true)); // with_filenameが優先
+                                                   // file_count > 1の場合は!no_filenameが評価される（no_filename=trueなので!true=false）
+        assert!(!is_print_filename(2, true, true)); // !no_filenameが評価される
     }
 
     #[test]
     fn test_command_line_error_display() {
         // エラーメッセージの表示テスト
         let error1 = CommandLineError::NoPattern;
-        assert_eq!(format!("{}", error1), "CommandLineError : no pattern specified.");
-        
+        assert_eq!(
+            format!("{}", error1),
+            "CommandLineError : no pattern specified."
+        );
+
         let error2 = CommandLineError::DuplicateFilenameOption;
-        assert_eq!(format!("{}", error2), "CommandLineError : -h, -H options are specified at the same time.");
+        assert_eq!(
+            format!("{}", error2),
+            "CommandLineError : -h, -H options are specified at the same time."
+        );
     }
 }

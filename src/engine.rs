@@ -84,11 +84,11 @@ pub fn match_line(
 
             is_match = match_string(code, &line[start..], is_dollar)?;
             if is_match {
-                break
+                break;
             }
             pos = start + 1;
         }
-    } else { 
+    } else {
         // 先頭リテラル無し → 旧ループ
         // ここに到達するのは、最初の命令が Char::Any の場合のみ
         for i in 0..line.len() {
@@ -119,10 +119,7 @@ fn match_string(
     Ok(match_result)
 }
 
-fn find_index(
-    string: &str,
-    string_set: &BTreeSet<String>,
-) -> Option<usize> {
+fn find_index(string: &str, string_set: &BTreeSet<String>) -> Option<usize> {
     string_set
         .iter()
         .map(|s| string.find(s))
@@ -158,7 +155,7 @@ mod tests {
         ];
 
         let actual: bool = match_string(&insts, "abcd", false).unwrap();
-        assert_eq!(actual, true);
+        assert!(actual);
     }
 
     #[test]
@@ -173,7 +170,7 @@ mod tests {
             Instruction::Match,
         ];
         let actual: bool = match_string(&insts, "abx", false).unwrap();
-        assert_eq!(actual, false);
+        assert!(!actual);
     }
 
     #[test]
@@ -186,7 +183,7 @@ mod tests {
             Instruction::Match,
         ];
         let actual: bool = match_string(&insts, "", false).unwrap();
-        assert_eq!(actual, true);
+        assert!(actual);
     }
 
     #[test]
@@ -238,8 +235,8 @@ mod tests {
 
         let (code, is_caret, is_dollar) = compile_pattern("ab(c|d)").unwrap();
         assert_eq!(code, expect);
-        assert_eq!(is_caret, false);
-        assert_eq!(is_dollar, false);
+        assert!(!is_caret);
+        assert!(!is_dollar);
     }
 
     #[test]
@@ -254,8 +251,8 @@ mod tests {
 
         let (code, is_caret, is_dollar) = compile_pattern("^a*").unwrap();
         assert_eq!(code, expect);
-        assert_eq!(is_caret, true);
-        assert_eq!(is_dollar, false);
+        assert!(is_caret);
+        assert!(!is_dollar);
     }
 
     #[test]
@@ -270,8 +267,8 @@ mod tests {
 
         let (code, is_caret, is_dollar) = compile_pattern("a?b$").unwrap();
         assert_eq!(code, expect);
-        assert_eq!(is_caret, false);
-        assert_eq!(is_dollar, true);
+        assert!(!is_caret);
+        assert!(is_dollar);
     }
 
     #[test]
@@ -290,11 +287,11 @@ mod tests {
 
         // "abc" という文字列をマッチングするテスト
         let actual1: bool = match_line(&insts, &first_strings, "abc", false, false).unwrap();
-        assert_eq!(actual1, true);
+        assert!(actual1);
 
         // "abe" という文字列をマッチングするテスト
         let actual2: bool = match_line(&insts, &first_strings, "abe", false, false).unwrap();
-        assert_eq!(actual2, false);
+        assert!(!actual2);
 
         // "a?b" というパターンに対するテスト
         // 命令列の 1 番目が Char 以外のテスト
@@ -306,7 +303,7 @@ mod tests {
         ];
         let first_strings: BTreeSet<String> = ["ab", "b"].iter().map(|s| s.to_string()).collect();
         let actual3 = match_line(&insts, &first_strings, "ab", false, false).unwrap();
-        assert_eq!(actual3, true);
+        assert!(actual3);
 
         // ".abc" というパターンに対するテスト
         let insts = vec![
@@ -318,7 +315,7 @@ mod tests {
         ];
         let first_strings: BTreeSet<String> = BTreeSet::new();
         let actual4 = match_line(&insts, &first_strings, "xxxabc", false, false).unwrap();
-        assert_eq!(actual4, true);
+        assert!(actual4);
     }
 
     #[test]
@@ -334,11 +331,11 @@ mod tests {
 
         // "aab" という文字列をマッチングするテスト
         let actual1: bool = match_line(&insts, &first_strings, "aab", true, false).unwrap();
-        assert_eq!(actual1, true);
+        assert!(actual1);
 
         // "xabcd" という文字列をマッチングするテスト
         let actual2: bool = match_line(&insts, &first_strings, "xabcd", true, false).unwrap();
-        assert_eq!(actual2, false);
+        assert!(!actual2);
     }
 
     #[test]
@@ -352,10 +349,10 @@ mod tests {
         let first_strings: BTreeSet<String> = ["a"].iter().map(|s| s.to_string()).collect();
         // "ab" という文字列をマッチングするテスト
         let actual1: bool = match_line(&insts, &first_strings, "ab", false, true).unwrap();
-        assert_eq!(actual1, true);
+        assert!(actual1);
 
         // "abc" という文字列をマッチングするテスト
         let actual2: bool = match_line(&insts, &first_strings, "abc", false, true).unwrap();
-        assert_eq!(actual2, false);
+        assert!(!actual2);
     }
 }

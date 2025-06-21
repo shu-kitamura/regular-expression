@@ -209,7 +209,7 @@ mod tests {
         ];
         let first_strings = Regex::get_first_strings(&insts);
         assert_eq!(first_strings.len(), 1);
-        assert!(first_strings.get("abc").is_some());
+        assert!(first_strings.contains("abc"));
 
         // "a*bc" のテスト
         let insts: Vec<Instruction> = vec![
@@ -308,25 +308,25 @@ mod tests {
     #[test]
     fn test_empty_and_special_strings() {
         // 実際の動作に基づいたテスト
-        
+
         // a+パターンのテスト（1個以上のa）
         let regex_plus = Regex::new("a+", false, false).unwrap();
         assert!(!regex_plus.is_match("").unwrap());
         assert!(regex_plus.is_match("a").unwrap());
         assert!(regex_plus.is_match("aaa").unwrap());
         assert!(regex_plus.is_match("baaac").unwrap()); // 文字列内にaが含まれている
-        
+
         // 空文字列パターンのテスト - エラーになることを確認
         let result_empty = Regex::new("", false, false);
         assert!(result_empty.is_err()); // 空パターンはエラーになる
-        
+
         // より具体的なパターンのテスト
         let regex_literal = Regex::new("abc", false, false).unwrap();
         assert!(regex_literal.is_match("abc").unwrap());
         assert!(regex_literal.is_match("xabcy").unwrap()); // 部分マッチ
         assert!(!regex_literal.is_match("ab").unwrap());
         assert!(!regex_literal.is_match("def").unwrap());
-        
+
         // ドット（任意文字）のテスト
         let regex_dot = Regex::new("a.c", false, false).unwrap();
         assert!(regex_dot.is_match("abc").unwrap());
@@ -407,26 +407,20 @@ mod tests {
         // get_string の境界ケース
 
         // 範囲外のインデックス
-        let insts: Vec<Instruction> = vec![
-            Instruction::Char(Char::Literal('a')),
-            Instruction::Match,
-        ];
+        let insts: Vec<Instruction> =
+            vec![Instruction::Char(Char::Literal('a')), Instruction::Match];
         let result = Regex::get_string(&insts, 10);
         assert_eq!(result, None);
 
         // Literal以外の命令で始まる
-        let insts: Vec<Instruction> = vec![
-            Instruction::Match,
-            Instruction::Char(Char::Literal('a')),
-        ];
+        let insts: Vec<Instruction> =
+            vec![Instruction::Match, Instruction::Char(Char::Literal('a'))];
         let result = Regex::get_string(&insts, 0);
         assert_eq!(result, None);
 
         // 単一のLiteral文字
-        let insts: Vec<Instruction> = vec![
-            Instruction::Char(Char::Literal('x')),
-            Instruction::Match,
-        ];
+        let insts: Vec<Instruction> =
+            vec![Instruction::Char(Char::Literal('x')), Instruction::Match];
         let result = Regex::get_string(&insts, 0);
         assert_eq!(result, Some("x".to_string()));
     }

@@ -114,22 +114,22 @@ mod tests {
     #[test]
     fn test_eval_char_true() {
         let actual: bool = eval_char(&Char::Literal('a'), "abc", 0);
-        assert_eq!(actual, true);
+        assert!(actual);
     }
 
     #[test]
     fn test_eval_char_false() {
         let actual1: bool = eval_char(&Char::Literal('a'), "abc", 1);
-        assert_eq!(actual1, false);
+        assert!(!actual1);
 
         let actual2: bool = eval_char(&Char::Literal('a'), "abc", 10);
-        assert_eq!(actual2, false);
+        assert!(!actual2);
     }
 
     #[test]
     fn test_eval_char_any() {
         let actual: bool = eval_char(&Char::Any, "abc", 0);
-        assert_eq!(actual, true);
+        assert!(actual);
     }
 
     #[test]
@@ -172,12 +172,12 @@ mod tests {
         // "abc" とマッチするケース
         let mut visited1: HashSet<(usize, usize)> = HashSet::new();
         let actual1 = eval_depth(&insts, "abc", 0, 0, false, &mut visited1).unwrap();
-        assert_eq!(actual1, true);
+        assert!(actual1);
 
         // "abd"とマッチするケース
         let mut visited2: HashSet<(usize, usize)> = HashSet::new();
         let actual2 = eval_depth(&insts, "abc", 0, 0, false, &mut visited2).unwrap();
-        assert_eq!(actual2, true);
+        assert!(actual2);
     }
 
     #[test]
@@ -196,7 +196,7 @@ mod tests {
         // "abx" とマッチするケース
         let mut visited: HashSet<(usize, usize)> = HashSet::new();
         let actual = eval_depth(&insts, "abX", 0, 0, false, &mut visited).unwrap();
-        assert_eq!(actual, false);
+        assert!(!actual);
     }
 
     #[test]
@@ -215,12 +215,12 @@ mod tests {
         // "xxxabc" とマッチするケース (true になる)
         let mut visited1: HashSet<(usize, usize)> = HashSet::new();
         let actual1: bool = eval_depth(&insts, "abc", 0, 0, true, &mut visited1).unwrap();
-        assert_eq!(actual1, true);
+        assert!(actual1);
 
         // "abcxxx"とマッチするケース (false になる)
         let mut visited2: HashSet<(usize, usize)> = HashSet::new();
         let actual2: bool = eval_depth(&insts, "abcxxx", 0, 0, true, &mut visited2).unwrap();
-        assert_eq!(actual2, false);
+        assert!(!actual2);
     }
 
     #[test]
@@ -241,12 +241,12 @@ mod tests {
         // "abcde" とマッチするケース（true）
         let mut visited1: HashSet<(usize, usize)> = HashSet::new();
         let actual1 = eval_depth(&insts, "abcde", 0, 0, false, &mut visited1).unwrap();
-        assert_eq!(actual1, true);
+        assert!(actual1);
 
         // "bcdef" とマッチするケース（false）
         let mut visited2: HashSet<(usize, usize)> = HashSet::new();
         let actual2 = eval_depth(&insts, "bcdef", 0, 0, false, &mut visited2).unwrap();
-        assert_eq!(actual2, false);
+        assert!(!actual2);
     }
 
     #[test]
