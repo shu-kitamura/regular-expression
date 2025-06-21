@@ -127,7 +127,7 @@ fn find_index(string: &str, string_set: &BTreeSet<String>) -> Option<usize> {
         .min()?
 }
 
-// ----- テストコード・試し -----
+// ----- テストコード -----
 
 #[cfg(test)]
 mod tests {
