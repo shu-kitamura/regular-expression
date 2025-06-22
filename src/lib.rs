@@ -3,7 +3,7 @@ use std::collections::BTreeSet;
 use engine::instruction::{Char, Instruction};
 
 mod engine;
-mod error;
+pub mod error;
 
 /// パターンと文字列のマッチングを実行するAPI
 ///

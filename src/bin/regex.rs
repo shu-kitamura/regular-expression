@@ -1,10 +1,12 @@
 use clap::{ArgAction, Parser};
-use regular_expression::Regex;
+use regular_expression::{
+    Regex,
+    error::{RegexError, CommandLineError},
+};
 use std::{
     fs::File,
     io::{stdin, BufRead, BufReader, Stdin},
 };
-use thiserror::Error;
 
 // 入力ファイルが stdin の場合、ファイル名を (standard input) とする。
 // grep コマンドでパイプ使用時にファイル名を表示したら、(standard input)なるのでそれに合わせている。
@@ -82,15 +84,6 @@ impl Args {
     }
 }
 
-/// コマンドラインの指定に不正があった場合に出力するエラーの型
-#[derive(Debug, Error, PartialEq)]
-pub enum CommandLineError {
-    #[error("CommandLineError : no pattern specified.")]
-    NoPattern,
-    #[error("CommandLineError : -h, -H options are specified at the same time.")]
-    DuplicateFilenameOption,
-}
-
 fn main() {
     let mut args: Args = Args::parse();
 
@@ -109,15 +102,14 @@ fn main() {
         }
     };
 
-    let regexes: Vec<Regex> = patterns
-        .iter()
-        .map(|p| {
-            Regex::new(p, args.ignore_case, args.invert_match).unwrap_or_else(|e| {
-                eprintln!("RegexError: {e}");
-                std::process::exit(1);
-            })
-        })
-        .collect();
+    // パターンをコンパイルして正規表現オブジェクトのリストを取得
+    let regexes: Vec<Regex> = match compile_patterns(&patterns, args.ignore_case, args.invert_match) {
+        Ok(regexes) => regexes,
+        Err(e) => {
+            eprintln!("RegexError: {e}");
+            std::process::exit(1);
+        }
+    };
 
     // マッチした行数を数えるための変数
     // -c オプションが指定されたときに使う
@@ -225,15 +217,48 @@ fn is_print_filename(file_count: usize, no_filename: bool, with_filename: bool) 
     }
 }
 
+/// パターン文字列のリストを正規表現オブジェクトのリストにコンパイルする関数
+///
+/// # 引数
+///
+/// * `patterns` - コンパイルするパターン文字列のリスト
+/// * `ignore_case` - 大文字と小文字を区別するかどうか
+/// * `invert_match` - マッチングの結果を反転するかどうか
+///
+/// # 返り値
+///
+/// * `Ok(Vec<Regex>)` - コンパイルに成功した場合、正規表現オブジェクトのリストを返す
+/// * `Err(RegexError)` - コンパイルに失敗した場合、エラーを返す
+fn compile_patterns(
+    patterns: &[String],
+    ignore_case: bool,
+    invert_match: bool,
+) -> Result<Vec<Regex>, RegexError> {
+    let mut regexes = Vec::with_capacity(patterns.len());
+    
+    for pattern in patterns {
+        // パターンを正規表現オブジェクトにコンパイル
+        let regex = Regex::new(pattern, ignore_case, invert_match)?;
+        regexes.push(regex);
+    }
+    
+    Ok(regexes)
+}
+
 // ----- テストコード -----
 
 #[cfg(test)]
 mod tests {
     use std::{fs::File, io::BufReader};
 
-    use regular_expression::Regex;
+    use regular_expression::{
+        Regex,
+        error::CommandLineError,
+    };
 
-    use crate::{is_print_filename, match_file, CommandLineError};
+    use crate::{is_print_filename, match_file};
+
+    mod compile_patterns_tests;
 
     #[test]
     fn test_is_print_filename() {
