@@ -4,11 +4,7 @@ use regular_expression::error::RegexError;
 #[test]
 fn test_compile_valid_patterns() {
     // 有効なパターンのリスト
-    let patterns = vec![
-        "abc".to_string(),
-        "a(b|c)d".to_string(),
-        "x.*y".to_string(),
-    ];
+    let patterns = vec!["abc".to_string(), "a(b|c)d".to_string(), "x.*y".to_string()];
 
     // デフォルトオプションでコンパイル
     let result = compile_patterns(&patterns, false, false);
@@ -65,7 +61,7 @@ fn test_compile_invalid_pattern() {
     // 無効なパターンを含むリスト
     let patterns = vec![
         "abc".to_string(),
-        "(".to_string(),  // 閉じ括弧がないので無効
+        "(".to_string(), // 閉じ括弧がないので無効
         "xyz".to_string(),
     ];
 
@@ -76,11 +72,11 @@ fn test_compile_invalid_pattern() {
     // エラーの種類を確認（ParseError::NoRightParen）
     if let Err(err) = result {
         match err {
-        RegexError::Parse(e) => {
-            // エラーメッセージに "no right parenthesis" が含まれていることを確認
-            assert!(format!("{}", e).contains("no right parenthesis"));
-        },
-        _ => panic!("Expected ParseError"),
+            RegexError::Parse(e) => {
+                // エラーメッセージに "no right parenthesis" が含まれていることを確認
+                assert!(format!("{}", e).contains("no right parenthesis"));
+            }
+            _ => panic!("Expected ParseError"),
         }
     }
 }
@@ -99,14 +95,14 @@ fn test_compile_empty_patterns() {
     // 結果が空のベクターであることを確認
     let regexes = result.unwrap();
     assert!(regexes.is_empty());
-    }
+}
 
-    #[test]
-    fn test_compile_multiple_invalid_patterns() {
+#[test]
+fn test_compile_multiple_invalid_patterns() {
     // 複数の無効なパターンを含むリスト
     let patterns = vec![
-        "*".to_string(),  // 先行する式がないので無効
-        "+".to_string(),  // 先行する式がないので無効
+        "*".to_string(), // 先行する式がないので無効
+        "+".to_string(), // 先行する式がないので無効
     ];
 
     // コンパイル結果がエラーであることを確認
@@ -116,11 +112,11 @@ fn test_compile_empty_patterns() {
     // 最初のエラー（*に関するエラー）が返されることを確認
     if let Err(err) = result {
         match err {
-        RegexError::Parse(e) => {
-            // エラーメッセージに "no previous expression" が含まれていることを確認
-            assert!(format!("{}", e).contains("no previous expression"));
-        },
-        _ => panic!("Expected ParseError"),
+            RegexError::Parse(e) => {
+                // エラーメッセージに "no previous expression" が含まれていることを確認
+                assert!(format!("{}", e).contains("no previous expression"));
+            }
+            _ => panic!("Expected ParseError"),
         }
     }
 }

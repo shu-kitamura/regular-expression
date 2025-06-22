@@ -1,7 +1,7 @@
 use clap::{ArgAction, Parser};
 use regular_expression::{
+    error::{CommandLineError, RegexError},
     Regex,
-    error::{RegexError, CommandLineError},
 };
 use std::{
     fs::File,
@@ -103,7 +103,8 @@ fn main() {
     };
 
     // パターンをコンパイルして正規表現オブジェクトのリストを取得
-    let regexes: Vec<Regex> = match compile_patterns(&patterns, args.ignore_case, args.invert_match) {
+    let regexes: Vec<Regex> = match compile_patterns(&patterns, args.ignore_case, args.invert_match)
+    {
         Ok(regexes) => regexes,
         Err(e) => {
             eprintln!("RegexError: {e}");
@@ -235,13 +236,13 @@ fn compile_patterns(
     invert_match: bool,
 ) -> Result<Vec<Regex>, RegexError> {
     let mut regexes = Vec::with_capacity(patterns.len());
-    
+
     for pattern in patterns {
         // パターンを正規表現オブジェクトにコンパイル
         let regex = Regex::new(pattern, ignore_case, invert_match)?;
         regexes.push(regex);
     }
-    
+
     Ok(regexes)
 }
 
@@ -251,10 +252,7 @@ fn compile_patterns(
 mod tests {
     use std::{fs::File, io::BufReader};
 
-    use regular_expression::{
-        Regex,
-        error::CommandLineError,
-    };
+    use regular_expression::{error::CommandLineError, Regex};
 
     use crate::{is_print_filename, match_file};
 
