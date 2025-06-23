@@ -84,6 +84,50 @@ impl Args {
     }
 }
 
+/// 入力ソース（ファイルまたは標準入力）を処理し、正規表現マッチングを実行する関数
+///
+/// # 引数
+///
+/// * `args` - コマンドライン引数（ファイルパスやオプションを含む）
+/// * `regexes` - 入力に対してマッチングする正規表現パターン
+///
+/// # 返り値
+///
+/// すべての入力ソースにわたるマッチング行の合計数
+fn execute_matching(args: &Args, regexes: &[Regex]) -> usize {
+    let mut matching_count: usize = 0;
+
+    if args.files.is_empty() {
+        // 標準入力を処理
+        let stdin: Stdin = stdin();
+        let mut buf_reader: BufReader<Stdin> = BufReader::new(stdin);
+
+        // 標準入力を1行ずつ read し、マッチングを実行する
+        if let Some(c) = match_file(&mut buf_reader, STDIN_FILENAME, regexes, args) {
+            matching_count += c;
+        }
+    } else {
+        // 各ファイルを処理
+        for file in &args.files {
+            // ファイルをオープンする
+            let buf_reader = match File::open(file) {
+                Ok(reader) => BufReader::new(reader),
+                Err(e) => {
+                    eprintln!("{e}");
+                    continue;
+                }
+            };
+
+            // ファイルを1行ずつ read し、マッチングを実行する
+            if let Some(c) = match_file(buf_reader, file, regexes, args) {
+                matching_count += c;
+            }
+        }
+    }
+
+    matching_count
+}
+
 fn main() {
     let mut args: Args = Args::parse();
 
@@ -112,35 +156,9 @@ fn main() {
         }
     };
 
-    // マッチした行数を数えるための変数
-    // -c オプションが指定されたときに使う
-    let mut matching_count: usize = 0;
+    // 入力ソースを処理し、マッチング行数を取得
+    let matching_count = execute_matching(&args, &regexes);
 
-    if args.files.is_empty() {
-        let stdin: Stdin = stdin();
-        let mut buf_reader: BufReader<Stdin> = BufReader::new(stdin);
-
-        // 標準入力を1行ずつ read し、マッチングを実行する
-        if let Some(c) = match_file(&mut buf_reader, STDIN_FILENAME, &regexes, &args) {
-            matching_count += c
-        }
-    } else {
-        for file in &args.files {
-            // ファイルをオープンする
-            let mut buf_reader: BufReader<File> = match File::open(file) {
-                Ok(reader) => BufReader::new(reader),
-                Err(e) => {
-                    eprintln!("{e}");
-                    continue;
-                }
-            };
-
-            // ファイルを1行ずつ read し、マッチングを実行する
-            if let Some(c) = match_file(&mut buf_reader, file, &regexes, &args) {
-                matching_count += c
-            };
-        }
-    }
     // -c が true の場合、行数を表示する。
     if args.count {
         println!("{matching_count}");
@@ -257,6 +275,7 @@ mod tests {
     use crate::{is_print_filename, match_file};
 
     mod compile_patterns_tests;
+    mod execute_matching_tests;
 
     #[test]
     fn test_is_print_filename() {
