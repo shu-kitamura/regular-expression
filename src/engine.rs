@@ -56,6 +56,7 @@ pub fn compile_pattern(mut pattern: &str) -> Result<(Vec<Instruction>, bool, boo
     // 空のパターン（例: "^$" が入力され、アンカーが除去された場合）を処理する。
     // アンカーが存在する場合のみ、空のパターンを許可する。
     // 空のパターンは空の文字列にマッチする必要があるため、Match 命令のみを含む命令列を返す。
+    // この Match 命令は、アンカー条件（行頭/行末）が満たされた場合に即座に成功する。
     if pattern.is_empty() && (is_caret || is_dollar) {
         return Ok((vec![Instruction::Match], is_caret, is_dollar));
     }
@@ -366,6 +367,7 @@ mod tests {
     #[test]
     fn test_compile_pattern_empty_with_anchors() {
         // "^$" というパターンをコンパイルするテスト（空行にマッチ）
+        // この機能は以前 ParseError::Empty を返していた問題を修正したもの
         let expect = vec![Instruction::Match];
 
         let (code, is_caret, is_dollar) = compile_pattern("^$").unwrap();
