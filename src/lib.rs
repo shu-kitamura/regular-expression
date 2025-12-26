@@ -303,6 +303,12 @@ mod tests {
         assert!(regex_both.is_match("hello").unwrap());
         assert!(!regex_both.is_match("hello world").unwrap());
         assert!(!regex_both.is_match("say hello").unwrap());
+
+        // 空行にマッチする ^$ パターンのテスト
+        let regex_empty_line = Regex::new("^$", false, false).unwrap();
+        assert!(regex_empty_line.is_match("").unwrap());
+        assert!(!regex_empty_line.is_match("test").unwrap());
+        assert!(!regex_empty_line.is_match(" ").unwrap()); // スペースを含む行はマッチしない
     }
 
     #[test]
