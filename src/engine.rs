@@ -53,6 +53,14 @@ pub fn compile_pattern(mut pattern: &str) -> Result<(Vec<Instruction>, bool, boo
         pattern = striped;
     }
 
+    // 空のパターン（例: "^$" が入力され、アンカーが除去された場合）を処理する。
+    // アンカーが存在する場合のみ、空のパターンを許可する。
+    // 空のパターンは空の文字列にマッチする必要があるため、Match 命令のみを含む命令列を返す。
+    // この Match 命令は、アンカー条件（行頭/行末）が満たされた場合に即座に成功する。
+    if pattern.is_empty() && (is_caret || is_dollar) {
+        return Ok((vec![Instruction::Match], is_caret, is_dollar));
+    }
+
     // パターンから Ast を生成する。
     let ast: Ast = parse(pattern)?;
 
@@ -354,5 +362,48 @@ mod tests {
         // "abc" という文字列をマッチングするテスト
         let actual2: bool = match_line(&insts, &first_strings, "abc", false, true).unwrap();
         assert!(!actual2);
+    }
+
+    #[test]
+    fn test_compile_pattern_empty_with_anchors() {
+        // "^$" というパターンをコンパイルするテスト（空行にマッチ）
+        // この機能は以前 ParseError::Empty を返していた問題を修正したもの
+        let expect = vec![Instruction::Match];
+
+        let (code, is_caret, is_dollar) = compile_pattern("^$").unwrap();
+        assert_eq!(code, expect);
+        assert!(is_caret);
+        assert!(is_dollar);
+
+        // "^" というパターンをコンパイルするテスト（行頭にマッチ）
+        let (code2, is_caret2, is_dollar2) = compile_pattern("^").unwrap();
+        assert_eq!(code2, vec![Instruction::Match]);
+        assert!(is_caret2);
+        assert!(!is_dollar2);
+
+        // "$" というパターンをコンパイルするテスト（行末にマッチ）
+        let (code3, is_caret3, is_dollar3) = compile_pattern("$").unwrap();
+        assert_eq!(code3, vec![Instruction::Match]);
+        assert!(!is_caret3);
+        assert!(is_dollar3);
+    }
+
+    #[test]
+    fn test_match_empty_line() {
+        // "^$" というパターンで空行をマッチングするテスト
+        let (code, is_caret, is_dollar) = compile_pattern("^$").unwrap();
+        let first_strings: BTreeSet<String> = BTreeSet::new();
+
+        // 空文字列とマッチするテスト
+        let actual1: bool = match_line(&code, &first_strings, "", is_caret, is_dollar).unwrap();
+        assert!(actual1);
+
+        // 非空文字列とマッチしないテスト
+        let actual2: bool = match_line(&code, &first_strings, "test", is_caret, is_dollar).unwrap();
+        assert!(!actual2);
+
+        // スペースを含む文字列とマッチしないテスト
+        let actual3: bool = match_line(&code, &first_strings, " ", is_caret, is_dollar).unwrap();
+        assert!(!actual3);
     }
 }
