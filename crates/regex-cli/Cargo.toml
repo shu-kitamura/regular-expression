@@ -1,0 +1,16 @@
+[package]
+name = "regex-cli"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+clap = { version = "4.5.11", features = ["derive"] }
+regex-core = { path = "../regex-core" }
+thiserror = "1.0"
+
+[dev-dependencies]
+tempfile = "3.0"
+
+[[bin]]
+name = "regex"
+path = "src/main.rs"

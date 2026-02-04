@@ -1,5 +1,5 @@
 use crate::compile_patterns;
-use regular_expression::error::RegexError;
+use regex_core::error::RegexError;
 
 #[test]
 fn test_compile_valid_patterns() {

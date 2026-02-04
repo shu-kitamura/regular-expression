@@ -1,8 +1,8 @@
+mod error;
+
 use clap::{ArgAction, Parser};
-use regular_expression::{
-    error::{CommandLineError, RegexError},
-    Regex,
-};
+use crate::error::CommandLineError;
+use regex_core::{error::RegexError, Regex};
 use std::{
     fs::File,
     io::{stdin, BufRead, BufReader, Stdin},
@@ -270,7 +270,8 @@ fn compile_patterns(
 mod tests {
     use std::{fs::File, io::BufReader};
 
-    use regular_expression::{error::CommandLineError, Regex};
+    use crate::error::CommandLineError;
+    use regex_core::Regex;
 
     use crate::{is_print_filename, match_file};
 
@@ -354,7 +355,7 @@ mod tests {
             Err(_) => panic!(),
         };
         let regexes: Vec<Regex> = vec![
-            Regex::new("regular-expression", false, false).unwrap(),
+            Regex::new("regex-cli", false, false).unwrap(),
             Regex::new("not match pattern", false, false).unwrap(),
         ];
         let args = super::Args {

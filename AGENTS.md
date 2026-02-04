@@ -21,33 +21,34 @@ Non-goals (adjust as needed):
 
 ## 2. Repository / Crate Layout
 
-- `src/lib.rs`: Public library API for the regex engine.
-- `src/engine/`: Core implementation
+- `crates/regex-core/src/lib.rs`: Public library API for the regex engine.
+- `crates/regex-core/src/engine/`: Core implementation
   - `parser.rs`, `compiler.rs`, `evaluator.rs`, `instruction.rs`.
-- `src/bin/regex.rs`: CLI entry (built as `regex`).
-- `tests/`: Integration tests (engine-level).
-- `src/bin/tests/`: Integration tests for the CLI.
-- `Cargo.toml`: Dependencies (`clap`, `thiserror`) and bin config.
+- `crates/regex-cli/src/bin/regex.rs`: CLI entry (built as `regex`).
+- `crates/regex-cli/tests/`: CLI integration tests (executes `cargo run`).
+- `crates/regex-cli/src/bin/tests/`: CLI unit tests for bin module helpers.
+- `Cargo.toml`: Workspace root (members + shared version/edition).
+- `crates/*/Cargo.toml`: Per-crate dependencies and bin config.
 
 ## 3. Development Commands
 
-- Build: `cargo build` — compile library and binary.
-- Run CLI: `cargo run -- "a*b" "aaab"` — example pattern + input.
-- Tests: `cargo test` — run unit + integration tests.
-- Lint: `cargo clippy -- -D warnings` — keep warnings at zero.
+- Build: `cargo build` or `cargo build -p regex-core` / `cargo build -p regex-cli`.
+- Run CLI: `cargo run -p regex-cli --bin regex -- "a*b" "aaab"` — example pattern + input.
+- Tests: `cargo test` or `cargo test -p regex-core` / `cargo test -p regex-cli`.
+- Lint: `cargo clippy --workspace -- -D warnings` — keep warnings at zero.
 - Format: `cargo fmt --all` — apply standard Rust formatting.
 
 ## 4. Coding Style & Naming Conventions
 
-- Rust 2021, 4-space indent; use `cargo fmt` before pushing.
+- Rust 2024, 4-space indent; use `cargo fmt` before pushing.
 - Names: `snake_case` for functions/modules, `CamelCase` for types, `SCREAMING_SNAKE_CASE` for consts.
 - Errors via `thiserror`; avoid `unwrap`/`expect` in library code.
-- Public API lives in `lib.rs`; keep `src/engine/*` focused and single‑responsibility.
+- Public API lives in `crates/regex-core/src/lib.rs`; keep `crates/regex-core/src/engine/*` focused and single‑responsibility.
 
 ## 5. Testing Guidelines
 
 - Framework: Rust built-in test harness.
-- Locations: unit tests near code; integration tests under `tests/` and `src/bin/tests/`.
+- Locations: unit tests near code; CLI integration tests under `crates/regex-cli/tests/`; bin helper tests under `crates/regex-cli/src/bin/tests/`.
 - Filenames: end with `_tests.rs` (e.g., `integration_tests.rs`).
 - Run subsets: `cargo test engine::parser` or `cargo test compile_patterns`.
 
@@ -62,4 +63,4 @@ Non-goals (adjust as needed):
 ## 7. Security & Configuration Tips
 - No network or unsafe code expected; keep dependencies minimal.
 - Validate and sanitize CLI inputs; prefer clear error messages over panics.
-- Keep `clap` argument parsing in `src/bin/regex.rs`; core engine should remain I/O‑free.
+- Keep `clap` argument parsing in `crates/regex-cli/src/bin/regex.rs`; core engine should remain I/O‑free.

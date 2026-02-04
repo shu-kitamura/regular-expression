@@ -58,7 +58,13 @@ PATTERN と入力ファイルの双方で、アルファベットの大文字と
 
 以下の手順でインストールできる。  
 ```shell
-cargo install --git https://github.com/shu-kitamura/regular-expression.git
+cargo install --git https://github.com/shu-kitamura/regular-expression.git -p regex-cli
+```
+
+## 開発用コマンド
+
+```shell
+cargo run -p regex-cli --bin regex -- "a*b" "aaab"
 ```
 
 ## 使用例

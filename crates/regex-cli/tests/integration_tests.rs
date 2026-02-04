@@ -16,6 +16,8 @@ fn test_cli_basic_pattern_matching() {
     let output = Command::new("cargo")
         .args([
             "run",
+            "-p",
+            "regex-cli",
             "--bin",
             "regex",
             "--",
@@ -41,6 +43,8 @@ fn test_cli_count_option() {
     let output = Command::new("cargo")
         .args([
             "run",
+            "-p",
+            "regex-cli",
             "--bin",
             "regex",
             "--",
@@ -65,6 +69,8 @@ fn test_cli_ignore_case_option() {
     let output = Command::new("cargo")
         .args([
             "run",
+            "-p",
+            "regex-cli",
             "--bin",
             "regex",
             "--",
@@ -91,6 +97,8 @@ fn test_cli_invert_match_option() {
     let output = Command::new("cargo")
         .args([
             "run",
+            "-p",
+            "regex-cli",
             "--bin",
             "regex",
             "--",
@@ -117,6 +125,8 @@ fn test_cli_line_number_option() {
     let output = Command::new("cargo")
         .args([
             "run",
+            "-p",
+            "regex-cli",
             "--bin",
             "regex",
             "--",
@@ -142,6 +152,8 @@ fn test_cli_multiple_patterns() {
     let output = Command::new("cargo")
         .args([
             "run",
+            "-p",
+            "regex-cli",
             "--bin",
             "regex",
             "--",
@@ -167,7 +179,7 @@ fn test_cli_stdin_input() {
     use std::process::{Command, Stdio};
 
     let mut child = Command::new("cargo")
-        .args(["run", "--bin", "regex", "--", "test"])
+        .args(["run", "-p", "regex-cli", "--bin", "regex", "--", "test"])
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .spawn()
@@ -200,6 +212,8 @@ fn test_cli_filename_options() {
     let output = Command::new("cargo")
         .args([
             "run",
+            "-p",
+            "regex-cli",
             "--bin",
             "regex",
             "--",
@@ -227,6 +241,8 @@ fn test_cli_no_filename_option() {
     let output = Command::new("cargo")
         .args([
             "run",
+            "-p",
+            "regex-cli",
             "--bin",
             "regex",
             "--",
@@ -251,6 +267,8 @@ fn test_cli_error_handling() {
     let output = Command::new("cargo")
         .args([
             "run",
+            "-p",
+            "regex-cli",
             "--bin",
             "regex",
             "--",
@@ -268,7 +286,7 @@ fn test_cli_error_handling() {
 fn test_cli_no_pattern_error() {
     // パターンを指定しない場合のエラー
     let output = Command::new("cargo")
-        .args(["run", "--bin", "regex", "--"])
+        .args(["run", "-p", "regex-cli", "--bin", "regex", "--"])
         .output()
         .expect("Failed to execute command");
 
@@ -284,6 +302,8 @@ fn test_cli_conflicting_options() {
     let output = Command::new("cargo")
         .args([
             "run",
+            "-p",
+            "regex-cli",
             "--bin",
             "regex",
             "--",
