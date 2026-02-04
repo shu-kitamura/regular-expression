@@ -23,12 +23,12 @@ impl Display for Instruction {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Instruction::Char(inst_char) => match inst_char {
-                Char::Literal(c) => write!(f, "char {}", c),
+                Char::Literal(c) => write!(f, "char {c}"),
                 Char::Any => write!(f, "char any"),
             },
             Instruction::Match => write!(f, "match"),
-            Instruction::Jump(addr) => write!(f, "jump {:>04}", addr),
-            Instruction::Split(addr1, addr2) => write!(f, "split {:>04}, {:>04}", addr1, addr2),
+            Instruction::Jump(addr) => write!(f, "jump {addr:>04}"),
+            Instruction::Split(addr1, addr2) => write!(f, "split {addr1:>04}, {addr2:>04}"),
         }
     }
 }
@@ -47,10 +47,10 @@ mod tests {
         let inst_jump = Instruction::Jump(10);
         let inst_split = Instruction::Split(20, 30);
 
-        assert_eq!(format!("{}", inst_literal), "char a");
-        assert_eq!(format!("{}", inst_any), "char any");
-        assert_eq!(format!("{}", inst_match), "match");
-        assert_eq!(format!("{}", inst_jump), "jump 0010");
-        assert_eq!(format!("{}", inst_split), "split 0020, 0030");
+        assert_eq!(format!("{inst_literal}"), "char a");
+        assert_eq!(format!("{inst_any}"), "char any");
+        assert_eq!(format!("{inst_match}"), "match");
+        assert_eq!(format!("{inst_jump}"), "jump 0010");
+        assert_eq!(format!("{inst_split}"), "split 0020, 0030");
     }
 }

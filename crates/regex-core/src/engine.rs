@@ -11,7 +11,7 @@ use crate::{
         compiler::compile,
         evaluator::eval,
         instruction::Instruction,
-        parser::{parse, Ast},
+        parser::{Ast, parse},
     },
     error::RegexError,
 };

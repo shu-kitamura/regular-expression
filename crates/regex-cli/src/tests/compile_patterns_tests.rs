@@ -74,7 +74,7 @@ fn test_compile_invalid_pattern() {
         match err {
             RegexError::Parse(e) => {
                 // エラーメッセージに "no right parenthesis" が含まれていることを確認
-                assert!(format!("{}", e).contains("no right parenthesis"));
+                assert!(format!("{e}").contains("no right parenthesis"));
             }
             _ => panic!("Expected ParseError"),
         }
@@ -114,7 +114,7 @@ fn test_compile_multiple_invalid_patterns() {
         match err {
             RegexError::Parse(e) => {
                 // エラーメッセージに "no previous expression" が含まれていることを確認
-                assert!(format!("{}", e).contains("no previous expression"));
+                assert!(format!("{e}").contains("no previous expression"));
             }
             _ => panic!("Expected ParseError"),
         }
