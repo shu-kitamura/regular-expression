@@ -1,4 +1,4 @@
-use crate::{execute_matching, Args, Regex};
+use crate::{Args, Regex, execute_matching};
 use std::io::Write;
 use tempfile::NamedTempFile;
 

@@ -233,7 +233,7 @@ mod tests {
 
     use crate::{
         engine::{
-            compiler::{compile, Compiler},
+            compiler::{Compiler, compile},
             instruction::{Char, Instruction},
             parser::Ast,
         },

@@ -156,7 +156,7 @@ pub fn parse(pattern: &str) -> Result<Ast, ParseError> {
 #[cfg(test)]
 mod tests {
     use crate::{
-        engine::parser::{fold_or, parse, parse_escape, parse_qualifier, Ast},
+        engine::parser::{Ast, fold_or, parse, parse_escape, parse_qualifier},
         error::ParseError,
     };
 

@@ -127,11 +127,7 @@ impl Regex {
             }
         }
 
-        if pre.is_empty() {
-            None
-        } else {
-            Some(pre)
-        }
+        if pre.is_empty() { None } else { Some(pre) }
     }
 }
 

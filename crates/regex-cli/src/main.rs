@@ -1,11 +1,11 @@
 mod error;
 
-use clap::{ArgAction, Parser};
 use crate::error::CommandLineError;
-use regex_core::{error::RegexError, Regex};
+use clap::{ArgAction, Parser};
+use regex_core::{Regex, error::RegexError};
 use std::{
     fs::File,
-    io::{stdin, BufRead, BufReader, Stdin},
+    io::{BufRead, BufReader, Stdin, stdin},
 };
 
 // 入力ファイルが stdin の場合、ファイル名を (standard input) とする。
@@ -530,7 +530,7 @@ mod tests {
         // 両方のオプションがtrueの場合
         // file_count <= 1の場合はwith_filenameが優先される
         assert!(is_print_filename(1, true, true)); // with_filenameが優先
-                                                   // file_count > 1の場合は!no_filenameが評価される（no_filename=trueなので!true=false）
+        // file_count > 1の場合は!no_filenameが評価される（no_filename=trueなので!true=false）
         assert!(!is_print_filename(2, true, true)); // !no_filenameが評価される
     }
 
@@ -539,13 +539,13 @@ mod tests {
         // エラーメッセージの表示テスト
         let error1 = CommandLineError::NoPattern;
         assert_eq!(
-            format!("{}", error1),
+            format!("{error1}"),
             "CommandLineError : no pattern specified."
         );
 
         let error2 = CommandLineError::DuplicateFilenameOption;
         assert_eq!(
-            format!("{}", error2),
+            format!("{error2}"),
             "CommandLineError : -h, -H options are specified at the same time."
         );
     }
