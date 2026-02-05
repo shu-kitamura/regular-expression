@@ -135,6 +135,13 @@ fn find_index(input: &[u8], byte_set: &BTreeSet<Vec<u8>>) -> Option<usize> {
 }
 
 /// バイト列から部分列を検索するヘルパー関数
+/// 
+/// 注意: この関数は標準ライブラリに同等の機能が追加された場合、
+/// そちらに移行する可能性があります。現在の実装は以下の理由で
+/// カスタム実装を使用しています:
+/// - 単純で明確な実装
+/// - 長さ1のパターンに対する最適化
+/// - 依存関係の追加を避ける
 fn find_subslice(haystack: &[u8], needle: &[u8]) -> Option<usize> {
     if needle.is_empty() {
         return Some(0);
