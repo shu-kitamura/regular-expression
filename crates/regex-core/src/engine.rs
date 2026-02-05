@@ -128,20 +128,33 @@ fn match_string(
 }
 
 fn find_index(input: &[u8], byte_set: &BTreeSet<Vec<u8>>) -> Option<usize> {
-    byte_set
-        .iter()
-        .filter_map(|pattern| find_subslice(input, pattern))
-        .min()
+    // パフォーマンス最適化: Rust の str::find() は高度に最適化されているため、
+    // UTF-8 として安全な部分（ASCII リテラル）を文字列として扱う。
+    // 正規表現パターンの先頭リテラルは ASCII のみなので、これは安全。
+    
+    // 入力を &str として解釈を試みる
+    if let Ok(input_str) = std::str::from_utf8(input) {
+        // すべてのパターンも &str に変換を試みる
+        let mut min_index: Option<usize> = None;
+        for pattern in byte_set {
+            if let Ok(pattern_str) = std::str::from_utf8(pattern) {
+                // str::find() を使用（SIMD 最適化されている）
+                if let Some(idx) = input_str.find(pattern_str) {
+                    min_index = Some(min_index.map_or(idx, |current: usize| current.min(idx)));
+                }
+            }
+        }
+        min_index
+    } else {
+        // UTF-8 として無効な場合はフォールバック
+        byte_set
+            .iter()
+            .filter_map(|pattern| find_subslice(input, pattern))
+            .min()
+    }
 }
 
-/// バイト列から部分列を検索するヘルパー関数
-/// 
-/// 注意: この関数は標準ライブラリに同等の機能が追加された場合、
-/// そちらに移行する可能性があります。現在の実装は以下の理由で
-/// カスタム実装を使用しています:
-/// - 単純で明確な実装
-/// - 長さ1のパターンに対する最適化
-/// - 依存関係の追加を避ける
+/// バイト列から部分列を検索するヘルパー関数（フォールバック用）
 fn find_subslice(haystack: &[u8], needle: &[u8]) -> Option<usize> {
     if needle.is_empty() {
         return Some(0);
