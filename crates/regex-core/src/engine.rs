@@ -165,8 +165,8 @@ mod tests {
     #[test]
     fn test_match_string_true() {
         let insts: Vec<Instruction> = vec![
-            Instruction::Char(Char::Literal('a')),
-            Instruction::Char(Char::Literal('b')),
+            Instruction::Char(Char::Literal(b'a')),
+            Instruction::Char(Char::Literal(b'b')),
             Instruction::Split(3, 5),
             Instruction::Char(Char::Literal(b'c')),
             Instruction::Jump(6),
@@ -181,8 +181,8 @@ mod tests {
     #[test]
     fn test_match_string_false() {
         let insts: Vec<Instruction> = vec![
-            Instruction::Char(Char::Literal('a')),
-            Instruction::Char(Char::Literal('b')),
+            Instruction::Char(Char::Literal(b'a')),
+            Instruction::Char(Char::Literal(b'b')),
             Instruction::Split(3, 5),
             Instruction::Char(Char::Literal(b'c')),
             Instruction::Jump(6),
@@ -198,7 +198,7 @@ mod tests {
         // パターン "a*" と空文字列のマッチングを行うテスト
         let insts: Vec<Instruction> = vec![
             Instruction::Split(1, 3),
-            Instruction::Char(Char::Literal('a')),
+            Instruction::Char(Char::Literal(b'a')),
             Instruction::Jump(0),
             Instruction::Match,
         ];
@@ -209,8 +209,8 @@ mod tests {
     #[test]
     fn test_match_string_eval_error() {
         let insts: Vec<Instruction> = vec![
-            Instruction::Char(Char::Literal('a')),
-            Instruction::Char(Char::Literal('b')),
+            Instruction::Char(Char::Literal(b'a')),
+            Instruction::Char(Char::Literal(b'b')),
             Instruction::Split(100, 200),
             Instruction::Char(Char::Literal(b'c')),
             Instruction::Jump(6),
@@ -244,8 +244,8 @@ mod tests {
     fn test_compile_pattern() {
         // "ab(c|d)" というパターンをコンパイルするテスト
         let expect = vec![
-            Instruction::Char(Char::Literal('a')),
-            Instruction::Char(Char::Literal('b')),
+            Instruction::Char(Char::Literal(b'a')),
+            Instruction::Char(Char::Literal(b'b')),
             Instruction::Split(3, 5),
             Instruction::Char(Char::Literal(b'c')),
             Instruction::Jump(6),
@@ -264,7 +264,7 @@ mod tests {
         // "^a*" というパターンをコンパイルするテスト
         let expect = vec![
             Instruction::Split(1, 3),
-            Instruction::Char(Char::Literal('a')),
+            Instruction::Char(Char::Literal(b'a')),
             Instruction::Jump(0),
             Instruction::Match,
         ];
@@ -280,8 +280,8 @@ mod tests {
         // "a?b$" というパターンをコンパイルするテスト
         let expect = vec![
             Instruction::Split(1, 2),
-            Instruction::Char(Char::Literal('a')),
-            Instruction::Char(Char::Literal('b')),
+            Instruction::Char(Char::Literal(b'a')),
+            Instruction::Char(Char::Literal(b'b')),
             Instruction::Match,
         ];
 
@@ -295,8 +295,8 @@ mod tests {
     fn test_match_line() {
         // "ab(c|d)" というパターンに対してのテスト
         let insts: Vec<Instruction> = vec![
-            Instruction::Char(Char::Literal('a')),
-            Instruction::Char(Char::Literal('b')),
+            Instruction::Char(Char::Literal(b'a')),
+            Instruction::Char(Char::Literal(b'b')),
             Instruction::Split(3, 5),
             Instruction::Char(Char::Literal(b'c')),
             Instruction::Jump(6),
@@ -306,19 +306,19 @@ mod tests {
         let first_strings: BTreeSet<Vec<u8>> = [b"ab".as_slice()].iter().map(|s| s.to_vec()).collect();
 
         // "abc" という文字列をマッチングするテスト
-        let actual1: bool = match_line(&insts, &first_strings, "abc", false, false).unwrap();
+        let actual1: bool = match_line(&insts, &first_strings, b"abc", false, false).unwrap();
         assert!(actual1);
 
         // "abe" という文字列をマッチングするテスト
-        let actual2: bool = match_line(&insts, &first_strings, "abe", false, false).unwrap();
+        let actual2: bool = match_line(&insts, &first_strings, b"abe", false, false).unwrap();
         assert!(!actual2);
 
         // "a?b" というパターンに対するテスト
         // 命令列の 1 番目が Char 以外のテスト
         let insts = vec![
             Instruction::Split(1, 2),
-            Instruction::Char(Char::Literal('a')),
-            Instruction::Char(Char::Literal('b')),
+            Instruction::Char(Char::Literal(b'a')),
+            Instruction::Char(Char::Literal(b'b')),
             Instruction::Match,
         ];
         let first_strings: BTreeSet<Vec<u8>> = [b"ab".as_slice(), b"b".as_slice()].iter().map(|s| s.to_vec()).collect();
@@ -328,8 +328,8 @@ mod tests {
         // ".abc" というパターンに対するテスト
         let insts = vec![
             Instruction::Char(Char::Any),
-            Instruction::Char(Char::Literal('a')),
-            Instruction::Char(Char::Literal('b')),
+            Instruction::Char(Char::Literal(b'a')),
+            Instruction::Char(Char::Literal(b'b')),
             Instruction::Char(Char::Literal(b'c')),
             Instruction::Match,
         ];
@@ -342,9 +342,9 @@ mod tests {
     fn test_match_line_caret() {
         // "^a+b" というパターンに対してのテスト
         let insts: Vec<Instruction> = vec![
-            Instruction::Char(Char::Literal('a')),
+            Instruction::Char(Char::Literal(b'a')),
             Instruction::Split(0, 2),
-            Instruction::Char(Char::Literal('b')),
+            Instruction::Char(Char::Literal(b'b')),
             Instruction::Match,
         ];
         let first_strings: BTreeSet<Vec<u8>> = [b"a".as_slice()].iter().map(|s| s.to_vec()).collect();
@@ -362,8 +362,8 @@ mod tests {
     fn test_match_line_dollar() {
         // "ab$" というパターンに対してのテスト
         let insts: Vec<Instruction> = vec![
-            Instruction::Char(Char::Literal('a')),
-            Instruction::Char(Char::Literal('b')),
+            Instruction::Char(Char::Literal(b'a')),
+            Instruction::Char(Char::Literal(b'b')),
             Instruction::Match,
         ];
         let first_strings: BTreeSet<Vec<u8>> = [b"a".as_slice()].iter().map(|s| s.to_vec()).collect();
@@ -407,7 +407,7 @@ mod tests {
         let first_strings: BTreeSet<Vec<u8>> = BTreeSet::new();
 
         // 空文字列とマッチするテスト
-        let actual1: bool = match_line(&code, &first_strings, "", is_caret, is_dollar).unwrap();
+        let actual1: bool = match_line(&code, &first_strings, b"", is_caret, is_dollar).unwrap();
         assert!(actual1);
 
         // 非空文字列とマッチしないテスト
