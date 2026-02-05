@@ -97,7 +97,7 @@ pub fn parse(pattern: &str) -> Result<Ast, ParseError> {
     let bytes = pattern.as_bytes();
     let mut char_pos: usize = 0;
 
-    for (i, &b) in bytes.iter().enumerate() {
+    for &b in bytes.iter() {
         // UTF-8の継続バイトかどうかで文字位置を決定
         let current_pos = if (b & 0b1100_0000) == 0b1000_0000 {
             // UTF-8継続バイト → 前の文字位置を使う
