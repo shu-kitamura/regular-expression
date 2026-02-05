@@ -191,6 +191,28 @@ mod tests {
     }
 
     #[test]
+    fn test_is_match_bytes() {
+        // パターン "ab(c|d)" から Regex 構造体を生成
+        let pattern = "ab(c|d)";
+        let regex = Regex::new(pattern, false, false).unwrap();
+
+        // b"abc" というバイト列に対して、マッチングを実行
+        let line = b"abc";
+        let result = regex.is_match_bytes(line).unwrap();
+        assert!(result);
+
+        // b"abe" というバイト列に対して、マッチングを実行
+        let line = b"abe";
+        let result = regex.is_match_bytes(line).unwrap();
+        assert!(!result);
+
+        // b"zab" というバイト列に対して、マッチングを実行（部分マッチ）
+        let line = b"zabc";
+        let result = regex.is_match_bytes(line).unwrap();
+        assert!(result);
+    }
+
+    #[test]
     fn test_is_match_ignore_case() {
         // パターン "ab(c|d)" から Regex 構造体を生成
         // is_ignore_case を true に設定
@@ -211,6 +233,26 @@ mod tests {
         let line = "ABC";
         let result = regex2.is_match(line).unwrap();
         assert!(!result);
+    }
+
+    #[test]
+    fn test_is_match_bytes_ignore_case() {
+        // パターン "ab(c|d)" から Regex 構造体を生成
+        // is_ignore_case を true に設定（ASCII のみ対応）
+        let pattern = "ab(c|d)";
+        let regex = Regex::new(pattern, true, false).unwrap();
+
+        // b"ABC" というバイト列に対して、マッチングを実行
+        let result = regex.is_match_bytes(b"ABC").unwrap();
+        assert!(result);
+
+        // 大小文字混在
+        let result = regex.is_match_bytes(b"AbC").unwrap();
+        assert!(result);
+
+        // ASCII 大小文字無視が機能していることを確認
+        let result = regex.is_match_bytes(b"ABD").unwrap();
+        assert!(result);
     }
 
     #[test]
