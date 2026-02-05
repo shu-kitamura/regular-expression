@@ -95,7 +95,7 @@ pub fn parse(pattern: &str) -> Result<Ast, ParseError> {
 
     // バイト列で処理しつつ、文字位置を追跡する
     let bytes = pattern.as_bytes();
-    let mut char_pos = 0;
+    let mut char_pos: usize = 0;
 
     for (i, &b) in bytes.iter().enumerate() {
         // UTF-8の継続バイトかどうかで文字位置を決定
