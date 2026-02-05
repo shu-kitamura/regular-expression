@@ -6,24 +6,24 @@ use std::fmt::{self, Display};
 /// コード生成時に使用する命令(Instruction)を表す型
 #[derive(Debug, PartialEq)]
 pub enum Instruction {
-    Char(Char),          // 文字列をマッチする命令
+    Char(Char),          // バイトをマッチする命令
     Match,               // マッチング成功を示す命令
     Jump(usize),         // 指定した命令アドレスにジャンプする命令
     Split(usize, usize), // 指定した2つの命令アドレスに分岐する命令
 }
 
-/// 文字を表す型
+/// バイトを表す型
 #[derive(Debug, PartialEq)]
 pub enum Char {
-    Literal(char), // 指定された文字（'a', 'b'など）に対応する
-    Any,           // 任意の文字('.')に対応する
+    Literal(u8), // 指定されたバイト（b'a', b'b'など）に対応する
+    Any,         // 任意のバイト('.')に対応する
 }
 
 impl Display for Instruction {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Instruction::Char(inst_char) => match inst_char {
-                Char::Literal(c) => write!(f, "char {c}"),
+                Char::Literal(b) => write!(f, "char {}", *b as char),
                 Char::Any => write!(f, "char any"),
             },
             Instruction::Match => write!(f, "match"),
@@ -41,7 +41,7 @@ mod tests {
 
     #[test]
     fn test_instruction_fmt() {
-        let inst_literal = Instruction::Char(Char::Literal('a'));
+        let inst_literal = Instruction::Char(Char::Literal(b'a'));
         let inst_any = Instruction::Char(Char::Any);
         let inst_match = Instruction::Match;
         let inst_jump = Instruction::Jump(10);
