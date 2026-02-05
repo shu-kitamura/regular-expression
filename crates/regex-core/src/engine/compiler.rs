@@ -89,8 +89,8 @@ impl Compiler {
     }
 
     /// Ast::Char 型に対応する Instruction を生成し、instructions に push する
-    fn gen_char(&mut self, c: char) -> Result<(), CompileError> {
-        let inst: Instruction = Instruction::Char(Char::Literal(c));
+    fn gen_char(&mut self, b: u8) -> Result<(), CompileError> {
+        let inst: Instruction = Instruction::Char(Char::Literal(b));
         self.increment_p_counter()?;
         self.instructions.push(inst);
         Ok(())
@@ -350,7 +350,7 @@ mod tests {
     fn test_update_instruction_address_failure_invalid_instruction() {
         let mut compiler = Compiler {
             p_counter: 99,
-            instructions: vec![Instruction::Char(Char::Literal('a')), Instruction::Match],
+            instructions: vec![Instruction::Char(Char::Literal(b'a')), Instruction::Match],
         };
 
         // インデックス 0 の命令は Char なのでエラーになる
@@ -366,13 +366,13 @@ mod tests {
 
     #[test]
     fn test_gen_char_success() {
-        let expect: Vec<Instruction> = vec![Instruction::Char(Char::Literal('a'))];
+        let expect: Vec<Instruction> = vec![Instruction::Char(Char::Literal(b'a'))];
         let mut compiler: Compiler = Compiler {
             p_counter: 0,
             instructions: Vec::new(),
         };
 
-        let _ = compiler.gen_char('a');
+        let _ = compiler.gen_char(b'a');
         let actual: Vec<Instruction> = compiler.instructions;
         assert_eq!(actual, expect);
     }
@@ -385,7 +385,7 @@ mod tests {
             instructions: Vec::new(),
         };
 
-        let actual = compiler.gen_char('a');
+        let actual = compiler.gen_char(b'a');
         assert_eq!(actual, expect);
     }
 
@@ -406,7 +406,7 @@ mod tests {
         // a* が入力されたケース
         let expect: Vec<Instruction> = vec![
             Instruction::Split(1, 3),
-            Instruction::Char(Char::Literal('a')),
+            Instruction::Char(Char::Literal(b'a')),
             Instruction::Jump(0),
         ];
 
@@ -415,7 +415,7 @@ mod tests {
             instructions: Vec::new(),
         };
 
-        let ast: Box<Ast> = Box::new(Ast::Char('a'));
+        let ast: Box<Ast> = Box::new(Ast::Char(b'a'));
 
         let _ = compiler.gen_star(&ast);
         let actual: Vec<Instruction> = compiler.instructions;
@@ -432,7 +432,7 @@ mod tests {
             instructions: Vec::new(),
         };
 
-        let ast: Box<Ast> = Box::new(Ast::Char('a'));
+        let ast: Box<Ast> = Box::new(Ast::Char(b'a'));
 
         let actual: Result<(), CompileError> = compiler.gen_star(&ast);
         assert_eq!(actual, expect);
@@ -442,7 +442,7 @@ mod tests {
     fn test_gen_plus_success() {
         // a+ が入力されたケース
         let expect: Vec<Instruction> = vec![
-            Instruction::Char(Char::Literal('a')),
+            Instruction::Char(Char::Literal(b'a')),
             Instruction::Split(0, 2),
         ];
 
@@ -451,7 +451,7 @@ mod tests {
             instructions: Vec::new(),
         };
 
-        let ast: Box<Ast> = Box::new(Ast::Char('a'));
+        let ast: Box<Ast> = Box::new(Ast::Char(b'a'));
 
         let _ = compiler.gen_plus(&ast);
         let actual: Vec<Instruction> = compiler.instructions;
@@ -463,7 +463,7 @@ mod tests {
         // a? が入力されたケース
         let expect: Vec<Instruction> = vec![
             Instruction::Split(1, 2),
-            Instruction::Char(Char::Literal('a')),
+            Instruction::Char(Char::Literal(b'a')),
         ];
 
         let mut compiler: Compiler = Compiler {
@@ -471,7 +471,7 @@ mod tests {
             instructions: Vec::new(),
         };
 
-        let ast: Box<Ast> = Box::new(Ast::Char('a'));
+        let ast: Box<Ast> = Box::new(Ast::Char(b'a'));
 
         let _ = compiler.gen_question(&ast);
         let actual: Vec<Instruction> = compiler.instructions;
@@ -486,7 +486,7 @@ mod tests {
             p_counter: 100,
             instructions: Vec::new(),
         };
-        let ast: Box<Ast> = Box::new(Ast::Char('a'));
+        let ast: Box<Ast> = Box::new(Ast::Char(b'a'));
 
         let actual: Result<(), CompileError> = compiler.gen_question(&ast);
         assert_eq!(actual, expect);
@@ -497,9 +497,9 @@ mod tests {
         // a|b が入力されたケース
         let expect: Vec<Instruction> = vec![
             Instruction::Split(1, 3),
-            Instruction::Char(Char::Literal('a')),
+            Instruction::Char(Char::Literal(b'a')),
             Instruction::Jump(4),
-            Instruction::Char(Char::Literal('b')),
+            Instruction::Char(Char::Literal(b'b')),
         ];
 
         let mut compiler: Compiler = Compiler {
@@ -507,8 +507,8 @@ mod tests {
             instructions: Vec::new(),
         };
 
-        let e1: Box<Ast> = Box::new(Ast::Seq(vec![Ast::Char('a')]));
-        let e2: Box<Ast> = Box::new(Ast::Seq(vec![Ast::Char('b')]));
+        let e1: Box<Ast> = Box::new(Ast::Seq(vec![Ast::Char(b'a')]));
+        let e2: Box<Ast> = Box::new(Ast::Seq(vec![Ast::Char(b'b')]));
 
         let _ = compiler.gen_or(&e1, &e2);
         let actual: Vec<Instruction> = compiler.instructions;
@@ -524,8 +524,8 @@ mod tests {
             instructions: Vec::new(),
         };
 
-        let e1: Box<Ast> = Box::new(Ast::Seq(vec![Ast::Char('a')]));
-        let e2: Box<Ast> = Box::new(Ast::Seq(vec![Ast::Char('b')]));
+        let e1: Box<Ast> = Box::new(Ast::Seq(vec![Ast::Char(b'a')]));
+        let e2: Box<Ast> = Box::new(Ast::Seq(vec![Ast::Char(b'b')]));
 
         let actual: Result<(), CompileError> = compiler.gen_or(&e1, &e2);
         assert_eq!(actual, expect);
@@ -534,12 +534,12 @@ mod tests {
     #[test]
     fn test_gen_seq_success() {
         let expect: Vec<Instruction> = vec![
-            Instruction::Char(Char::Literal('a')),
-            Instruction::Char(Char::Literal('b')),
-            Instruction::Char(Char::Literal('c')),
+            Instruction::Char(Char::Literal(b'a')),
+            Instruction::Char(Char::Literal(b'b')),
+            Instruction::Char(Char::Literal(b'c')),
         ];
 
-        let v: Vec<Ast> = vec![Ast::Char('a'), Ast::Char('b'), Ast::Char('c')];
+        let v: Vec<Ast> = vec![Ast::Char(b'a'), Ast::Char(b'b'), Ast::Char(b'c')];
 
         let mut compiler: Compiler = Compiler {
             p_counter: 0,
@@ -556,9 +556,9 @@ mod tests {
         // a|b が入力されたケース
         let expect: Vec<Instruction> = vec![
             Instruction::Split(1, 3),
-            Instruction::Char(Char::Literal('a')),
+            Instruction::Char(Char::Literal(b'a')),
             Instruction::Jump(4),
-            Instruction::Char(Char::Literal('b')),
+            Instruction::Char(Char::Literal(b'b')),
             Instruction::Match,
         ];
 
@@ -567,8 +567,8 @@ mod tests {
             instructions: Vec::new(),
         };
 
-        let e1: Box<Ast> = Box::new(Ast::Seq(vec![Ast::Char('a')]));
-        let e2: Box<Ast> = Box::new(Ast::Seq(vec![Ast::Char('b')]));
+        let e1: Box<Ast> = Box::new(Ast::Seq(vec![Ast::Char(b'a')]));
+        let e2: Box<Ast> = Box::new(Ast::Seq(vec![Ast::Char(b'b')]));
         let or = Ast::Or(e1, e2);
 
         let _ = compiler.gen_code(&or);
@@ -580,16 +580,16 @@ mod tests {
     fn test_gen_code_contain_any() {
         // a.b が入力されたケース
         let expect: Vec<Instruction> = vec![
-            Instruction::Char(Char::Literal('a')),
+            Instruction::Char(Char::Literal(b'a')),
             Instruction::Char(Char::Any),
-            Instruction::Char(Char::Literal('b')),
+            Instruction::Char(Char::Literal(b'b')),
             Instruction::Match,
         ];
         let mut compiler: Compiler = Compiler {
             p_counter: 0,
             instructions: Vec::new(),
         };
-        let ast: Box<Ast> = Box::new(Ast::Seq(vec![Ast::Char('a'), Ast::AnyChar, Ast::Char('b')]));
+        let ast: Box<Ast> = Box::new(Ast::Seq(vec![Ast::Char(b'a'), Ast::AnyChar, Ast::Char(b'b')]));
         let _ = compiler.gen_code(&ast);
         let actual: Vec<Instruction> = compiler.instructions;
         assert_eq!(actual, expect);
@@ -600,7 +600,7 @@ mod tests {
         // a*b が入力されたケース
         let expect: Vec<Instruction> = vec![
             Instruction::Split(1, 3),
-            Instruction::Char(Char::Literal('a')),
+            Instruction::Char(Char::Literal(b'a')),
             Instruction::Jump(0),
             Instruction::Match,
         ];
@@ -608,7 +608,7 @@ mod tests {
             p_counter: 0,
             instructions: Vec::new(),
         };
-        let ast: Box<Ast> = Box::new(Ast::Star(Box::new(Ast::Char('a'))));
+        let ast: Box<Ast> = Box::new(Ast::Star(Box::new(Ast::Char(b'a'))));
         let _ = compiler.gen_code(&ast);
         let actual: Vec<Instruction> = compiler.instructions;
         assert_eq!(actual, expect);
@@ -618,7 +618,7 @@ mod tests {
     fn test_gen_code_contain_plus() {
         // a+b が入力されたケース
         let expect: Vec<Instruction> = vec![
-            Instruction::Char(Char::Literal('a')),
+            Instruction::Char(Char::Literal(b'a')),
             Instruction::Split(0, 2),
             Instruction::Match,
         ];
@@ -626,7 +626,7 @@ mod tests {
             p_counter: 0,
             instructions: Vec::new(),
         };
-        let ast: Box<Ast> = Box::new(Ast::Plus(Box::new(Ast::Char('a'))));
+        let ast: Box<Ast> = Box::new(Ast::Plus(Box::new(Ast::Char(b'a'))));
         let _ = compiler.gen_code(&ast);
         let actual: Vec<Instruction> = compiler.instructions;
         assert_eq!(actual, expect);
@@ -637,8 +637,8 @@ mod tests {
         // a?b が入力されたケース
         let expect: Vec<Instruction> = vec![
             Instruction::Split(1, 2),
-            Instruction::Char(Char::Literal('a')),
-            Instruction::Char(Char::Literal('b')),
+            Instruction::Char(Char::Literal(b'a')),
+            Instruction::Char(Char::Literal(b'b')),
             Instruction::Match,
         ];
         let mut compiler: Compiler = Compiler {
@@ -646,8 +646,8 @@ mod tests {
             instructions: Vec::new(),
         };
         let ast: Box<Ast> = Box::new(Ast::Seq(vec![
-            Ast::Question(Box::new(Ast::Char('a'))),
-            Ast::Char('b'),
+            Ast::Question(Box::new(Ast::Char(b'a'))),
+            Ast::Char(b'b'),
         ]));
         let _ = compiler.gen_code(&ast);
         let actual: Vec<Instruction> = compiler.instructions;
@@ -658,14 +658,14 @@ mod tests {
     fn test_compile_success() {
         let expect: Vec<Instruction> = vec![
             Instruction::Split(1, 3),
-            Instruction::Char(Char::Literal('a')),
+            Instruction::Char(Char::Literal(b'a')),
             Instruction::Jump(4),
-            Instruction::Char(Char::Literal('b')),
+            Instruction::Char(Char::Literal(b'b')),
             Instruction::Match,
         ];
 
-        let e1: Box<Ast> = Box::new(Ast::Seq(vec![Ast::Char('a')]));
-        let e2: Box<Ast> = Box::new(Ast::Seq(vec![Ast::Char('b')]));
+        let e1: Box<Ast> = Box::new(Ast::Seq(vec![Ast::Char(b'a')]));
+        let e2: Box<Ast> = Box::new(Ast::Seq(vec![Ast::Char(b'b')]));
         let or = Ast::Or(e1, e2);
 
         let actual = compile(&or).unwrap();
