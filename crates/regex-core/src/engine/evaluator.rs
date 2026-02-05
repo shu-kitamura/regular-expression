@@ -11,10 +11,14 @@ use crate::{
 };
 
 /// バイトと Instruction を評価する
+/// 
+/// 注意: バイト指向の実装のため、`Char::Any` は任意の1バイトにマッチします。
+/// これは UTF-8 のマルチバイト文字の途中にもマッチする可能性がありますが、
+/// バイト指向の正規表現エンジンとしては正しい動作です。
 fn eval_char(inst: &Char, input: &[u8], index: usize) -> bool {
     let inst_byte = match inst {
         Char::Literal(b) => *b,
-        Char::Any => return input.get(index).is_some(),
+        Char::Any => return input.get(index).is_some(), // 任意の1バイトにマッチ
     };
 
     input.get(index) == Some(&inst_byte)

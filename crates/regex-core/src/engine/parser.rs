@@ -87,6 +87,12 @@ fn fold_or(mut seq_or: Vec<Ast>) -> Option<Ast> {
 }
 
 /// 式をパースし、Astを生成
+/// 
+/// 注意: このパーサーは ASCII 正規表現パターンを前提としています。
+/// バイト列として処理しますが、エラー位置は文字位置として報告します。
+/// ASCII 外の文字を含むパターンの場合、エラー位置がバイト位置と
+/// 文字位置で異なる可能性がありますが、正規表現パターン自体が
+/// ASCII メタ文字で構成されるため、実用上は問題ありません。
 pub fn parse(pattern: &str) -> Result<Ast, ParseError> {
     let mut seq: Vec<Ast> = Vec::new();
     let mut seq_or: Vec<Ast> = Vec::new();
@@ -94,11 +100,15 @@ pub fn parse(pattern: &str) -> Result<Ast, ParseError> {
     let mut is_escape: bool = false;
 
     // バイト列で処理しつつ、文字位置を追跡する
+    // ASCII パターンでは各バイトが1文字に対応するため、
+    // UTF-8 継続バイトの処理は実質的に不要ですが、
+    // 非 ASCII 文字を含む可能性も考慮しています。
     let bytes = pattern.as_bytes();
     let mut char_pos: usize = 0;
 
     for &b in bytes.iter() {
         // UTF-8の継続バイトかどうかで文字位置を決定
+        // ASCII パターン（正規表現のメタ文字）では常に新しい文字となります
         let current_pos = if (b & 0b1100_0000) == 0b1000_0000 {
             // UTF-8継続バイト → 前の文字位置を使う
             char_pos.saturating_sub(1)
