@@ -5,18 +5,18 @@ use engine::instruction::{Char, Instruction};
 mod engine;
 pub mod error;
 
-/// パターンと文字列のマッチングを実行するAPI
+/// パターンとバイト列のマッチングを実行するAPI
 ///
 /// # 引数
 ///
 /// * code -> コンパイル済みのコード
-/// * is_ignore_case -> 大小文字の区別をするかどうか
+/// * is_ignore_case -> 大小文字の区別をするかどうか（ASCII のみ）
 /// * is_invert_match -> マッチングの結果を逆にする
 /// * is_caret -> 行頭からのマッチングをするかどうか
 /// * is_dollar -> 行末からのマッチングをするかどうか
 pub struct Regex {
     code: Vec<Instruction>,
-    first_strings: BTreeSet<String>,
+    first_strings: BTreeSet<Vec<u8>>,
     is_ignore_case: bool,
     is_invert_match: bool,
     is_caret: bool,
@@ -29,7 +29,7 @@ impl Regex {
     /// # 引数
     ///
     /// * pattern -> 正規表現のパターン
-    /// * is_ignore_case -> 大小文字の区別をするかどうか
+    /// * is_ignore_case -> 大小文字の区別をするかどうか（ASCII のみ対象）
     /// * is_invert_match -> マッチングの結果を逆にするかどうか
     ///
     /// # 返り値
@@ -42,8 +42,8 @@ impl Regex {
         is_invert_match: bool,
     ) -> Result<Self, error::RegexError> {
         let (code, is_caret, is_dollar) = if is_ignore_case {
-            // 大小文字を区別しない場合、パターンを小文字でコンパイルする
-            engine::compile_pattern(&pattern.to_lowercase())?
+            // 大小文字を区別しない場合、パターンを ASCII 小文字でコンパイルする
+            engine::compile_pattern(&Self::to_ascii_lowercase(pattern))?
         } else {
             engine::compile_pattern(pattern)?
         };
@@ -60,7 +60,7 @@ impl Regex {
         })
     }
 
-    /// 行とパターンのマッチングを実行する
+    /// 行とパターンのマッチングを実行する（文字列版）
     ///
     /// # 引数
     ///
@@ -71,13 +71,37 @@ impl Regex {
     /// * エラーが発生した場合は RegexError を返す。
     /// * エラーが発生しなかった場合は、マッチング結果を返す。
     ///   ※ is_invert_match に true が指定されている場合は マッチング結果が反対になる。  
+    ///   
+    /// # 注意
+    ///
+    /// is_ignore_case が true の場合、ASCII のみを対象に大小文字を無視します。
     pub fn is_match(&self, line: &str) -> Result<bool, error::RegexError> {
+        self.is_match_bytes(line.as_bytes())
+    }
+
+    /// 行とパターンのマッチングを実行する（バイト列版）
+    ///
+    /// # 引数
+    ///
+    /// * line -> マッチング対象のバイト列
+    ///
+    /// # 返り値
+    ///
+    /// * エラーが発生した場合は RegexError を返す。
+    /// * エラーが発生しなかった場合は、マッチング結果を返す。
+    ///   ※ is_invert_match に true が指定されている場合は マッチング結果が反対になる。  
+    ///   
+    /// # 注意
+    ///
+    /// is_ignore_case が true の場合、ASCII のみを対象に大小文字を無視します。
+    pub fn is_match_bytes(&self, line: &[u8]) -> Result<bool, error::RegexError> {
         let is_match = if self.is_ignore_case {
-            // 大小文字を区別しない場合、行を小文字にしてマッチングする
+            // 大小文字を区別しない場合、行を ASCII 小文字にしてマッチングする
+            let lowercase_line = Self::to_ascii_lowercase_bytes(line);
             engine::match_line(
                 &self.code,
                 &self.first_strings,
-                &line.to_lowercase(),
+                &lowercase_line,
                 self.is_caret,
                 self.is_dollar,
             )?
@@ -93,20 +117,32 @@ impl Regex {
         Ok(is_match ^ self.is_invert_match)
     }
 
-    fn get_first_strings(insts: &[Instruction]) -> BTreeSet<String> {
-        let mut first_strings: BTreeSet<String> = BTreeSet::new();
+    /// ASCII 文字列を小文字に変換するヘルパー関数
+    fn to_ascii_lowercase(s: &str) -> String {
+        s.chars()
+            .map(|c| if c.is_ascii() { c.to_ascii_lowercase() } else { c })
+            .collect()
+    }
+
+    /// ASCII バイト列を小文字に変換するヘルパー関数
+    fn to_ascii_lowercase_bytes(bytes: &[u8]) -> Vec<u8> {
+        bytes.iter().map(|&b| b.to_ascii_lowercase()).collect()
+    }
+
+    fn get_first_strings(insts: &[Instruction]) -> BTreeSet<Vec<u8>> {
+        let mut first_strings: BTreeSet<Vec<u8>> = BTreeSet::new();
         match insts.first() {
             Some(Instruction::Char(Char::Literal(_))) => {
-                if let Some(string) = Self::get_string(insts, 0) {
-                    first_strings.insert(string);
+                if let Some(bytes) = Self::get_string(insts, 0) {
+                    first_strings.insert(bytes);
                 };
             }
             Some(Instruction::Split(left, right)) => {
-                if let Some(string) = Self::get_string(insts, *left) {
-                    first_strings.insert(string);
+                if let Some(bytes) = Self::get_string(insts, *left) {
+                    first_strings.insert(bytes);
                 };
-                if let Some(string) = Self::get_string(insts, *right) {
-                    first_strings.insert(string);
+                if let Some(bytes) = Self::get_string(insts, *right) {
+                    first_strings.insert(bytes);
                 };
             }
             _ => {} // Jump や Match になることはないため、何もしない
@@ -114,20 +150,20 @@ impl Regex {
         first_strings
     }
 
-    fn get_string(insts: &[Instruction], mut start: usize) -> Option<String> {
-        let mut pre: String = String::new();
+    fn get_string(insts: &[Instruction], mut start: usize) -> Option<Vec<u8>> {
+        let mut bytes: Vec<u8> = Vec::new();
 
         while start < insts.len() {
             match insts.get(start) {
-                Some(Instruction::Char(Char::Literal(c))) => {
-                    pre.push(*c);
+                Some(Instruction::Char(Char::Literal(b))) => {
+                    bytes.push(*b);
                     start += 1;
                 }
                 _ => break,
             }
         }
 
-        if pre.is_empty() { None } else { Some(pre) }
+        if bytes.is_empty() { None } else { Some(bytes) }
     }
 }
 
@@ -155,6 +191,28 @@ mod tests {
     }
 
     #[test]
+    fn test_is_match_bytes() {
+        // パターン "ab(c|d)" から Regex 構造体を生成
+        let pattern = "ab(c|d)";
+        let regex = Regex::new(pattern, false, false).unwrap();
+
+        // b"abc" というバイト列に対して、マッチングを実行
+        let line = b"abc";
+        let result = regex.is_match_bytes(line).unwrap();
+        assert!(result);
+
+        // b"abe" というバイト列に対して、マッチングを実行
+        let line = b"abe";
+        let result = regex.is_match_bytes(line).unwrap();
+        assert!(!result);
+
+        // b"zab" というバイト列に対して、マッチングを実行（部分マッチ）
+        let line = b"zabc";
+        let result = regex.is_match_bytes(line).unwrap();
+        assert!(result);
+    }
+
+    #[test]
     fn test_is_match_ignore_case() {
         // パターン "ab(c|d)" から Regex 構造体を生成
         // is_ignore_case を true に設定
@@ -178,6 +236,26 @@ mod tests {
     }
 
     #[test]
+    fn test_is_match_bytes_ignore_case() {
+        // パターン "ab(c|d)" から Regex 構造体を生成
+        // is_ignore_case を true に設定（ASCII のみ対応）
+        let pattern = "ab(c|d)";
+        let regex = Regex::new(pattern, true, false).unwrap();
+
+        // b"ABC" というバイト列に対して、マッチングを実行
+        let result = regex.is_match_bytes(b"ABC").unwrap();
+        assert!(result);
+
+        // 大小文字混在
+        let result = regex.is_match_bytes(b"AbC").unwrap();
+        assert!(result);
+
+        // ASCII 大小文字無視が機能していることを確認
+        let result = regex.is_match_bytes(b"ABD").unwrap();
+        assert!(result);
+    }
+
+    #[test]
     fn test_is_match_invert() {
         // パターン "ab(c|d)" から Regex 構造体を生成
         let pattern = "ab(c|d)";
@@ -198,36 +276,36 @@ mod tests {
     fn test_get_first_strings() {
         // "abc" のテスト
         let insts: Vec<Instruction> = vec![
-            Instruction::Char(Char::Literal('a')),
-            Instruction::Char(Char::Literal('b')),
-            Instruction::Char(Char::Literal('c')),
+            Instruction::Char(Char::Literal(b'a')),
+            Instruction::Char(Char::Literal(b'b')),
+            Instruction::Char(Char::Literal(b'c')),
             Instruction::Match,
         ];
         let first_strings = Regex::get_first_strings(&insts);
         assert_eq!(first_strings.len(), 1);
-        assert!(first_strings.contains("abc"));
+        assert!(first_strings.contains(&b"abc".to_vec()));
 
         // "a*bc" のテスト
         let insts: Vec<Instruction> = vec![
             Instruction::Split(1, 3),
-            Instruction::Char(Char::Literal('a')),
+            Instruction::Char(Char::Literal(b'a')),
             Instruction::Jump(0),
-            Instruction::Char(Char::Literal('b')),
-            Instruction::Char(Char::Literal('c')),
+            Instruction::Char(Char::Literal(b'b')),
+            Instruction::Char(Char::Literal(b'c')),
             Instruction::Match,
         ];
         let first_strings = Regex::get_first_strings(&insts);
         assert_eq!(first_strings.len(), 2);
-        assert!(first_strings.contains("a"));
-        assert!(first_strings.contains("bc"));
+        assert!(first_strings.contains(&b"a".to_vec()));
+        assert!(first_strings.contains(&b"bc".to_vec()));
 
         // 以下のテストは実際にはありえないが、テストのために用意
 
         // 命令列の先頭が Jump のテスト
         let insts: Vec<Instruction> = vec![
             Instruction::Jump(1),
-            Instruction::Char(Char::Literal('a')),
-            Instruction::Char(Char::Literal('b')),
+            Instruction::Char(Char::Literal(b'a')),
+            Instruction::Char(Char::Literal(b'b')),
             Instruction::Match,
         ];
         let first_strings = Regex::get_first_strings(&insts);
@@ -236,8 +314,8 @@ mod tests {
         // 命令列の先頭が Match のテスト
         let insts: Vec<Instruction> = vec![
             Instruction::Match,
-            Instruction::Char(Char::Literal('a')),
-            Instruction::Char(Char::Literal('b')),
+            Instruction::Char(Char::Literal(b'a')),
+            Instruction::Char(Char::Literal(b'b')),
         ];
         let first_strings = Regex::get_first_strings(&insts);
         assert_eq!(first_strings.len(), 0);
@@ -250,7 +328,7 @@ mod tests {
         let insts = regex.code;
         let first_strings = Regex::get_first_strings(&insts);
         assert_eq!(first_strings.len(), 1);
-        assert!(first_strings.contains("E"))
+        assert!(first_strings.contains(&b"E".to_vec()))
     }
 
     #[test]
@@ -379,7 +457,7 @@ mod tests {
         // AnyChar で始まるパターン
         let insts: Vec<Instruction> = vec![
             Instruction::Char(Char::Any),
-            Instruction::Char(Char::Literal('a')),
+            Instruction::Char(Char::Literal(b'a')),
             Instruction::Match,
         ];
         let first_strings = Regex::get_first_strings(&insts);
@@ -393,16 +471,16 @@ mod tests {
         // Split で始まり、両方の分岐が Literal
         let insts: Vec<Instruction> = vec![
             Instruction::Split(1, 3),
-            Instruction::Char(Char::Literal('a')),
+            Instruction::Char(Char::Literal(b'a')),
             Instruction::Jump(5),
-            Instruction::Char(Char::Literal('b')),
-            Instruction::Char(Char::Literal('c')),
+            Instruction::Char(Char::Literal(b'b')),
+            Instruction::Char(Char::Literal(b'c')),
             Instruction::Match,
         ];
         let first_strings = Regex::get_first_strings(&insts);
         assert_eq!(first_strings.len(), 2);
-        assert!(first_strings.contains("a"));
-        assert!(first_strings.contains("bc"));
+        assert!(first_strings.contains(&b"a".to_vec()));
+        assert!(first_strings.contains(&b"bc".to_vec()));
     }
 
     #[test]
@@ -411,20 +489,20 @@ mod tests {
 
         // 範囲外のインデックス
         let insts: Vec<Instruction> =
-            vec![Instruction::Char(Char::Literal('a')), Instruction::Match];
+            vec![Instruction::Char(Char::Literal(b'a')), Instruction::Match];
         let result = Regex::get_string(&insts, 10);
         assert_eq!(result, None);
 
         // Literal以外の命令で始まる
         let insts: Vec<Instruction> =
-            vec![Instruction::Match, Instruction::Char(Char::Literal('a'))];
+            vec![Instruction::Match, Instruction::Char(Char::Literal(b'a'))];
         let result = Regex::get_string(&insts, 0);
         assert_eq!(result, None);
 
         // 単一のLiteral文字
         let insts: Vec<Instruction> =
-            vec![Instruction::Char(Char::Literal('x')), Instruction::Match];
+            vec![Instruction::Char(Char::Literal(b'x')), Instruction::Match];
         let result = Regex::get_string(&insts, 0);
-        assert_eq!(result, Some("x".to_string()));
+        assert_eq!(result, Some(b"x".to_vec()));
     }
 }
