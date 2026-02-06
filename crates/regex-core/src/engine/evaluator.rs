@@ -1,4 +1,4 @@
-//! Instruction とバイト配列を受け取って評価する
+//! Instruction と char配列を受け取って評価する
 
 use std::collections::HashSet;
 
@@ -10,50 +10,17 @@ use crate::{
     error::EvalError,
 };
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct EvalOptions {
-    pub is_end_dollar: bool,
-    pub ignore_case_ascii: bool,
-}
-
-#[derive(Default, Debug)]
-pub struct EvalScratch {
-    visited: HashSet<(usize, usize)>,
-}
-
-impl EvalScratch {
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    pub fn clear(&mut self) {
-        self.visited.clear();
-    }
-}
-
-/// バイトと Instruction を評価する
-///
-/// 注意: バイト指向の実装のため、`Char::Any` は任意の1バイトにマッチします。
-/// これは UTF-8 のマルチバイト文字の途中にもマッチする可能性がありますが、
-/// バイト指向の正規表現エンジンとしては正しい動作です。
-fn eval_char(inst: &Char, input: &[u8], index: usize, ignore_case_ascii: bool) -> bool {
-    let inst_byte = match inst {
-        Char::Literal(b) => *b,
-        Char::Any => return input.get(index).is_some(), // 任意の1バイトにマッチ
+/// char と Instruction を評価する
+fn eval_char(inst: &Char, string: &str, index: usize) -> bool {
+    let inst_char = match inst {
+        Char::Literal(c) => *c,
+        Char::Any => return true,
     };
 
-    let Some(input_byte) = input.get(index).copied() else {
-        return false;
-    };
-
-    if ignore_case_ascii {
-        input_byte.eq_ignore_ascii_case(&inst_byte)
-    } else {
-        input_byte == inst_byte
-    }
+    string.chars().nth(index) == Some(inst_char)
 }
 
-/// プログラムカウンタとバイト配列のインデックスをインクリメントする
+/// プログラムカウンタとchar配列のインデックスをインクリメントする
 fn increment_pc_and_index(pc: &mut usize, index: &mut usize) -> Result<(), EvalError> {
     safe_add(pc, &1, || EvalError::PCOverFlow)?;
     safe_add(index, &1, || EvalError::CharIndexOverFlow)
@@ -62,17 +29,13 @@ fn increment_pc_and_index(pc: &mut usize, index: &mut usize) -> Result<(), EvalE
 /// 深さ優先探索で再帰的にマッチングを行う関数
 fn eval_depth(
     instructions: &[Instruction],
-    input: &[u8],
+    string: &str,
     mut p_counter: usize,
     mut char_index: usize,
-    options: EvalOptions,
-    scratch: &mut EvalScratch,
+    is_end_dollar: bool,
+    visited: &mut HashSet<(usize, usize)>,
 ) -> Result<bool, EvalError> {
     loop {
-        if !scratch.visited.insert((p_counter, char_index)) {
-            return Ok(false);
-        }
-
         // Instruction を取得
         let instruction: &Instruction = match instructions.get(p_counter) {
             Some(inst) => inst,
@@ -82,64 +45,67 @@ fn eval_depth(
         // Instruction の型に応じて、評価を実行。
         match instruction {
             Instruction::Char(inst_char) => {
-                if eval_char(inst_char, input, char_index, options.ignore_case_ascii) {
+                if eval_char(inst_char, string, char_index) {
                     increment_pc_and_index(&mut p_counter, &mut char_index)?;
                 } else {
                     return Ok(false);
                 };
             }
             Instruction::Match => {
-                if options.is_end_dollar {
-                    return Ok(input.len() == char_index);
+                if is_end_dollar {
+                    return Ok(string.len() == char_index);
                 } else {
                     return Ok(true);
                 }
             }
             Instruction::Jump(addr) => p_counter = *addr,
             Instruction::Split(addr1, addr2) => {
+                // すでに訪れた状態の場合、無限ループを避けるために false を返す
+                if !visited.insert((*addr1, char_index)) {
+                    return Ok(false);
+                }
+
                 // 1つ目の Split を評価する
-                if eval_depth(instructions, input, *addr1, char_index, options, scratch)? {
+                if eval_depth(
+                    instructions,
+                    string,
+                    *addr1,
+                    char_index,
+                    is_end_dollar,
+                    visited,
+                )? {
                     return Ok(true);
                 }
 
                 // 1つ目の Split が失敗した場合、2つ目の Split を評価する
-                return eval_depth(instructions, input, *addr2, char_index, options, scratch);
+                return eval_depth(
+                    instructions,
+                    string,
+                    *addr2,
+                    char_index,
+                    is_end_dollar,
+                    visited,
+                );
             }
         }
     }
 }
 
-pub fn eval_from(
-    inst: &[Instruction],
-    input: &[u8],
-    start_index: usize,
-    options: EvalOptions,
-    scratch: &mut EvalScratch,
-) -> Result<bool, EvalError> {
-    scratch.clear();
-    eval_depth(inst, input, 0, start_index, options, scratch)
-}
-
 /// 命令列の評価を行う関数
-pub fn eval(inst: &[Instruction], input: &[u8], is_end_dollar: bool) -> Result<bool, EvalError> {
-    let mut scratch = EvalScratch::new();
-    let options = EvalOptions {
-        is_end_dollar,
-        ignore_case_ascii: false,
-    };
-    eval_from(inst, input, 0, options, &mut scratch)
+pub fn eval(inst: &[Instruction], string: &str, is_end_dollar: bool) -> Result<bool, EvalError> {
+    let mut visited = HashSet::new();
+    eval_depth(inst, string, 0, 0, is_end_dollar, &mut visited)
 }
 
 // ----- テストコード -----
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashSet;
+
     use crate::{
         engine::{
-            evaluator::{
-                EvalOptions, EvalScratch, eval, eval_char, eval_depth, eval_from,
-                increment_pc_and_index,
-            },
+            evaluator::{eval_char, eval_depth, increment_pc_and_index},
             instruction::{Char, Instruction},
         },
         error::EvalError,
@@ -147,32 +113,23 @@ mod tests {
 
     #[test]
     fn test_eval_char_true() {
-        let actual: bool = eval_char(&Char::Literal(b'a'), b"abc", 0, false);
+        let actual: bool = eval_char(&Char::Literal('a'), "abc", 0);
         assert!(actual);
     }
 
     #[test]
     fn test_eval_char_false() {
-        let actual1: bool = eval_char(&Char::Literal(b'a'), b"abc", 1, false);
+        let actual1: bool = eval_char(&Char::Literal('a'), "abc", 1);
         assert!(!actual1);
 
-        let actual2: bool = eval_char(&Char::Literal(b'a'), b"abc", 10, false);
+        let actual2: bool = eval_char(&Char::Literal('a'), "abc", 10);
         assert!(!actual2);
     }
 
     #[test]
     fn test_eval_char_any() {
-        let actual: bool = eval_char(&Char::Any, b"abc", 0, false);
+        let actual: bool = eval_char(&Char::Any, "abc", 0);
         assert!(actual);
-    }
-
-    #[test]
-    fn test_eval_char_ignore_case_ascii() {
-        let actual: bool = eval_char(&Char::Literal(b'a'), b"A", 0, true);
-        assert!(actual);
-
-        let actual: bool = eval_char(&Char::Literal(b'a'), b"A", 0, false);
-        assert!(!actual);
     }
 
     #[test]
@@ -203,27 +160,23 @@ mod tests {
     fn test_eval_depth_true() {
         // "ab(c|d)" が入力された Instruction
         let insts: Vec<Instruction> = vec![
-            Instruction::Char(Char::Literal(b'a')),
-            Instruction::Char(Char::Literal(b'b')),
+            Instruction::Char(Char::Literal('a')),
+            Instruction::Char(Char::Literal('b')),
             Instruction::Split(3, 5),
-            Instruction::Char(Char::Literal(b'c')),
+            Instruction::Char(Char::Literal('c')),
             Instruction::Jump(6),
-            Instruction::Char(Char::Literal(b'd')),
+            Instruction::Char(Char::Literal('d')),
             Instruction::Match,
         ];
 
-        // b"abc" とマッチするケース
-        let mut scratch1 = EvalScratch::new();
-        let options = EvalOptions {
-            is_end_dollar: false,
-            ignore_case_ascii: false,
-        };
-        let actual1 = eval_depth(&insts, b"abc", 0, 0, options, &mut scratch1).unwrap();
+        // "abc" とマッチするケース
+        let mut visited1: HashSet<(usize, usize)> = HashSet::new();
+        let actual1 = eval_depth(&insts, "abc", 0, 0, false, &mut visited1).unwrap();
         assert!(actual1);
 
-        // b"abd"とマッチするケース
-        let mut scratch2 = EvalScratch::new();
-        let actual2 = eval_depth(&insts, b"abc", 0, 0, options, &mut scratch2).unwrap();
+        // "abd"とマッチするケース
+        let mut visited2: HashSet<(usize, usize)> = HashSet::new();
+        let actual2 = eval_depth(&insts, "abc", 0, 0, false, &mut visited2).unwrap();
         assert!(actual2);
     }
 
@@ -231,22 +184,18 @@ mod tests {
     fn test_eval_depth_false() {
         // "ab(c|d)" が入力された Instruction
         let insts: Vec<Instruction> = vec![
-            Instruction::Char(Char::Literal(b'a')),
-            Instruction::Char(Char::Literal(b'b')),
+            Instruction::Char(Char::Literal('a')),
+            Instruction::Char(Char::Literal('b')),
             Instruction::Split(3, 5),
-            Instruction::Char(Char::Literal(b'c')),
+            Instruction::Char(Char::Literal('c')),
             Instruction::Jump(6),
-            Instruction::Char(Char::Literal(b'd')),
+            Instruction::Char(Char::Literal('d')),
             Instruction::Match,
         ];
 
         // "abx" とマッチするケース
-        let mut scratch = EvalScratch::new();
-        let options = EvalOptions {
-            is_end_dollar: false,
-            ignore_case_ascii: false,
-        };
-        let actual = eval_depth(&insts, b"abX", 0, 0, options, &mut scratch).unwrap();
+        let mut visited: HashSet<(usize, usize)> = HashSet::new();
+        let actual = eval_depth(&insts, "abX", 0, 0, false, &mut visited).unwrap();
         assert!(!actual);
     }
 
@@ -254,27 +203,23 @@ mod tests {
     fn test_eval_depth_is_end_dollar() {
         // "ab(c|d)" が入力された Instruction
         let insts: Vec<Instruction> = vec![
-            Instruction::Char(Char::Literal(b'a')),
-            Instruction::Char(Char::Literal(b'b')),
+            Instruction::Char(Char::Literal('a')),
+            Instruction::Char(Char::Literal('b')),
             Instruction::Split(3, 5),
-            Instruction::Char(Char::Literal(b'c')),
+            Instruction::Char(Char::Literal('c')),
             Instruction::Jump(6),
-            Instruction::Char(Char::Literal(b'd')),
+            Instruction::Char(Char::Literal('d')),
             Instruction::Match,
         ];
 
         // "xxxabc" とマッチするケース (true になる)
-        let options = EvalOptions {
-            is_end_dollar: true,
-            ignore_case_ascii: false,
-        };
-        let mut scratch1 = EvalScratch::new();
-        let actual1: bool = eval_depth(&insts, b"abc", 0, 0, options, &mut scratch1).unwrap();
+        let mut visited1: HashSet<(usize, usize)> = HashSet::new();
+        let actual1: bool = eval_depth(&insts, "abc", 0, 0, true, &mut visited1).unwrap();
         assert!(actual1);
 
-        // b"abcxxx"とマッチするケース (false になる)
-        let mut scratch2 = EvalScratch::new();
-        let actual2: bool = eval_depth(&insts, b"abcxxx", 0, 0, options, &mut scratch2).unwrap();
+        // "abcxxx"とマッチするケース (false になる)
+        let mut visited2: HashSet<(usize, usize)> = HashSet::new();
+        let actual2: bool = eval_depth(&insts, "abcxxx", 0, 0, true, &mut visited2).unwrap();
         assert!(!actual2);
     }
 
@@ -282,74 +227,37 @@ mod tests {
     fn test_eval_depth_infinite_loop() {
         // "abc(d*)*" が入力された Instruction
         let insts: Vec<Instruction> = vec![
-            Instruction::Char(Char::Literal(b'a')),
-            Instruction::Char(Char::Literal(b'b')),
-            Instruction::Char(Char::Literal(b'c')),
+            Instruction::Char(Char::Literal('a')),
+            Instruction::Char(Char::Literal('b')),
+            Instruction::Char(Char::Literal('c')),
             Instruction::Split(4, 8),
             Instruction::Split(5, 7),
-            Instruction::Char(Char::Literal(b'd')),
+            Instruction::Char(Char::Literal('d')),
             Instruction::Jump(4),
             Instruction::Jump(3),
             Instruction::Match,
         ];
 
-        // b"abcde" とマッチするケース（true）
-        let options = EvalOptions {
-            is_end_dollar: false,
-            ignore_case_ascii: false,
-        };
-        let mut scratch1 = EvalScratch::new();
-        let actual1 = eval_depth(&insts, b"abcde", 0, 0, options, &mut scratch1).unwrap();
+        // "abcde" とマッチするケース（true）
+        let mut visited1: HashSet<(usize, usize)> = HashSet::new();
+        let actual1 = eval_depth(&insts, "abcde", 0, 0, false, &mut visited1).unwrap();
         assert!(actual1);
 
-        // b"bcdef" とマッチするケース（false）
-        let mut scratch2 = EvalScratch::new();
-        let actual2 = eval_depth(&insts, b"bcdef", 0, 0, options, &mut scratch2).unwrap();
+        // "bcdef" とマッチするケース（false）
+        let mut visited2: HashSet<(usize, usize)> = HashSet::new();
+        let actual2 = eval_depth(&insts, "bcdef", 0, 0, false, &mut visited2).unwrap();
         assert!(!actual2);
     }
 
     #[test]
     fn test_eval_depth_invalidpc() {
         let insts: Vec<Instruction> = vec![
-            Instruction::Char(Char::Literal(b'a')),
-            Instruction::Char(Char::Literal(b'b')),
+            Instruction::Char(Char::Literal('a')),
+            Instruction::Char(Char::Literal('b')),
             Instruction::Match,
         ];
-        let mut scratch = EvalScratch::new();
-        let options = EvalOptions {
-            is_end_dollar: false,
-            ignore_case_ascii: false,
-        };
-        let actual = eval_depth(&insts, b"abcd", usize::MAX, 0, options, &mut scratch);
+        let mut visited: HashSet<(usize, usize)> = HashSet::new();
+        let actual = eval_depth(&insts, "abcd", usize::MAX, 0, false, &mut visited);
         assert_eq!(actual, Err(EvalError::InvalidPC));
-    }
-
-    #[test]
-    fn test_eval_from_start_index() {
-        let insts: Vec<Instruction> = vec![
-            Instruction::Char(Char::Literal(b'a')),
-            Instruction::Char(Char::Literal(b'b')),
-            Instruction::Match,
-        ];
-        let mut scratch = EvalScratch::new();
-        let options = EvalOptions {
-            is_end_dollar: true,
-            ignore_case_ascii: false,
-        };
-
-        let actual = eval_from(&insts, b"zab", 1, options, &mut scratch).unwrap();
-        assert!(actual);
-    }
-
-    #[test]
-    fn test_eval_wrapper() {
-        let insts: Vec<Instruction> = vec![
-            Instruction::Char(Char::Literal(b'a')),
-            Instruction::Char(Char::Literal(b'b')),
-            Instruction::Match,
-        ];
-
-        let actual = eval(&insts, b"ab", true).unwrap();
-        assert!(actual);
     }
 }
