@@ -589,7 +589,11 @@ mod tests {
             p_counter: 0,
             instructions: Vec::new(),
         };
-        let ast: Box<Ast> = Box::new(Ast::Seq(vec![Ast::Char(b'a'), Ast::AnyChar, Ast::Char(b'b')]));
+        let ast: Box<Ast> = Box::new(Ast::Seq(vec![
+            Ast::Char(b'a'),
+            Ast::AnyChar,
+            Ast::Char(b'b'),
+        ]));
         let _ = compiler.gen_code(&ast);
         let actual: Vec<Instruction> = compiler.instructions;
         assert_eq!(actual, expect);

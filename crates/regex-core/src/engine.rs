@@ -3,15 +3,15 @@ pub mod compiler;
 pub mod evaluator;
 pub mod instruction;
 pub mod parser;
-
-use std::collections::BTreeSet;
+pub mod search_plan;
 
 use crate::{
     engine::{
         compiler::compile,
-        evaluator::eval,
+        evaluator::{EvalOptions, EvalScratch, eval, eval_from},
         instruction::Instruction,
         parser::{Ast, parse},
+        search_plan::SearchPlan,
     },
     error::RegexError,
 };
@@ -70,117 +70,128 @@ pub fn compile_pattern(mut pattern: &str) -> Result<(Vec<Instruction>, bool, boo
     Ok((instructions, is_caret, is_dollar))
 }
 
+pub fn build_search_plan(code: &[Instruction]) -> SearchPlan {
+    SearchPlan::build(code)
+}
+
 /// パターンとバイト列のマッチングを実行する
 pub fn match_line(
     code: &[Instruction],
-    first_strings: &BTreeSet<Vec<u8>>,
+    search_plan: &SearchPlan,
     line: &[u8],
+    is_ignore_case: bool,
     is_caret: bool,
     is_dollar: bool,
 ) -> Result<bool, RegexError> {
-    let mut is_match: bool = false;
+    let mut scratch = EvalScratch::new();
 
     if is_caret {
-        return match_string(code, line, is_dollar);
+        return match_from(code, line, 0, is_ignore_case, is_dollar, &mut scratch);
     }
 
-    // 先頭リテラルがある場合、最初の文字を取得する
-    if !first_strings.is_empty() {
-        let mut pos = 0;
-        while let Some(i) = find_index(&line[pos..], first_strings) {
-            let start = pos + i;
+    if search_plan.can_match_empty && !is_dollar {
+        return Ok(true);
+    }
 
-            is_match = match_string(code, &line[start..], is_dollar)?;
-            if is_match {
-                break;
+    for start in 0..=line.len() {
+        if start == line.len() {
+            if !search_plan.can_match_empty {
+                continue;
             }
-            pos = start + 1;
+        } else {
+            if !search_plan.accepts_first_byte(line[start], is_ignore_case) {
+                continue;
+            }
+
+            if let Some(literal) = search_plan.leading_literal.as_deref()
+                && !starts_with_literal_at(line, start, literal, is_ignore_case)
+            {
+                continue;
+            }
         }
-    } else {
-        // 先頭リテラル無し → 旧ループ
-        // ここに到達するのは、最初の命令が Char::Any の場合のみ
-        for i in 0..line.len() {
-            // abcdefg という文字列の場合、以下のように順にマッチングする。
-            //     ループ1 : abcdefg
-            //     ループ2 : bcdefg
-            //     ・・・
-            //     ループN : g
-            is_match = match_string(code, &line[i..], is_dollar)?;
 
-            // マッチングが成功した場合、ループを抜ける
-            if is_match {
-                break;
-            }
+        if match_from(code, line, start, is_ignore_case, is_dollar, &mut scratch)? {
+            return Ok(true);
         }
     }
 
-    Ok(is_match)
+    Ok(false)
 }
 
 /// バイト列のマッチングを実行する。
+fn match_from(
+    insts: &[Instruction],
+    input: &[u8],
+    start_index: usize,
+    is_ignore_case: bool,
+    is_end_dollar: bool,
+    scratch: &mut EvalScratch,
+) -> Result<bool, RegexError> {
+    if start_index == 0 && !is_ignore_case {
+        let match_result: bool = eval(insts, input, is_end_dollar)?;
+        return Ok(match_result);
+    }
+
+    let options = EvalOptions {
+        is_end_dollar,
+        ignore_case_ascii: is_ignore_case,
+    };
+    let match_result: bool = eval_from(insts, input, start_index, options, scratch)?;
+    Ok(match_result)
+}
+
+#[cfg(test)]
 fn match_string(
     insts: &[Instruction],
     input: &[u8],
     is_end_dollar: bool,
 ) -> Result<bool, RegexError> {
-    let match_result: bool = eval(insts, input, is_end_dollar)?;
-    Ok(match_result)
+    let mut scratch = EvalScratch::new();
+    match_from(insts, input, 0, false, is_end_dollar, &mut scratch)
 }
 
-fn find_index(input: &[u8], byte_set: &BTreeSet<Vec<u8>>) -> Option<usize> {
-    // パフォーマンス最適化: Rust の str::find() は高度に最適化されているため、
-    // UTF-8 として安全な部分（ASCII リテラル）を文字列として扱う。
-    // 正規表現パターンの先頭リテラルは ASCII のみなので、これは安全。
-    
-    // 入力を &str として解釈を試みる
-    if let Ok(input_str) = std::str::from_utf8(input) {
-        // すべてのパターンも &str に変換を試みる
-        let mut min_index: Option<usize> = None;
-        for pattern in byte_set {
-            if let Ok(pattern_str) = std::str::from_utf8(pattern) {
-                // str::find() を使用（SIMD 最適化されている）
-                if let Some(idx) = input_str.find(pattern_str) {
-                    min_index = Some(min_index.map_or(idx, |current: usize| current.min(idx)));
-                }
-            }
-        }
-        min_index
-    } else {
-        // UTF-8 として無効な場合はフォールバック
-        byte_set
+fn starts_with_literal_at(
+    input: &[u8],
+    start: usize,
+    literal: &[u8],
+    ignore_case_ascii: bool,
+) -> bool {
+    if literal.is_empty() {
+        return true;
+    }
+
+    let end = start.saturating_add(literal.len());
+    if end > input.len() {
+        return false;
+    }
+
+    if ignore_case_ascii {
+        input[start..end]
             .iter()
-            .filter_map(|pattern| find_subslice(input, pattern))
-            .min()
+            .zip(literal.iter())
+            .all(|(&input_b, &pat_b)| input_b.eq_ignore_ascii_case(&pat_b))
+    } else {
+        &input[start..end] == literal
     }
-}
-
-/// バイト列から部分列を検索するヘルパー関数（フォールバック用）
-fn find_subslice(haystack: &[u8], needle: &[u8]) -> Option<usize> {
-    if needle.is_empty() {
-        return Some(0);
-    }
-    if needle.len() == 1 {
-        return haystack.iter().position(|&b| b == needle[0]);
-    }
-    haystack
-        .windows(needle.len())
-        .position(|window| window == needle)
 }
 
 // ----- テストコード -----
 
 #[cfg(test)]
 mod tests {
-    use std::collections::BTreeSet;
-
     use crate::{
         engine::{
-            compile_pattern,
+            build_search_plan, compile_pattern,
             instruction::{Char, Instruction},
             match_line, match_string, safe_add,
+            search_plan::SearchPlan,
         },
         error::{EvalError, RegexError},
     };
+
+    fn plan(insts: &[Instruction]) -> SearchPlan {
+        build_search_plan(insts)
+    }
 
     #[test]
     fn test_match_string_true() {
@@ -323,14 +334,14 @@ mod tests {
             Instruction::Char(Char::Literal(b'd')),
             Instruction::Match,
         ];
-        let first_strings: BTreeSet<Vec<u8>> = [b"ab".as_slice()].iter().map(|s| s.to_vec()).collect();
+        let search_plan = plan(&insts);
 
         // "abc" という文字列をマッチングするテスト
-        let actual1: bool = match_line(&insts, &first_strings, b"abc", false, false).unwrap();
+        let actual1: bool = match_line(&insts, &search_plan, b"abc", false, false, false).unwrap();
         assert!(actual1);
 
         // "abe" という文字列をマッチングするテスト
-        let actual2: bool = match_line(&insts, &first_strings, b"abe", false, false).unwrap();
+        let actual2: bool = match_line(&insts, &search_plan, b"abe", false, false, false).unwrap();
         assert!(!actual2);
 
         // "a?b" というパターンに対するテスト
@@ -341,8 +352,8 @@ mod tests {
             Instruction::Char(Char::Literal(b'b')),
             Instruction::Match,
         ];
-        let first_strings: BTreeSet<Vec<u8>> = [b"ab".as_slice(), b"b".as_slice()].iter().map(|s| s.to_vec()).collect();
-        let actual3 = match_line(&insts, &first_strings, b"ab", false, false).unwrap();
+        let search_plan = plan(&insts);
+        let actual3 = match_line(&insts, &search_plan, b"ab", false, false, false).unwrap();
         assert!(actual3);
 
         // ".abc" というパターンに対するテスト
@@ -353,8 +364,8 @@ mod tests {
             Instruction::Char(Char::Literal(b'c')),
             Instruction::Match,
         ];
-        let first_strings: BTreeSet<Vec<u8>> = BTreeSet::new();
-        let actual4 = match_line(&insts, &first_strings, b"xxxabc", false, false).unwrap();
+        let search_plan = plan(&insts);
+        let actual4 = match_line(&insts, &search_plan, b"xxxabc", false, false, false).unwrap();
         assert!(actual4);
     }
 
@@ -367,14 +378,14 @@ mod tests {
             Instruction::Char(Char::Literal(b'b')),
             Instruction::Match,
         ];
-        let first_strings: BTreeSet<Vec<u8>> = [b"a".as_slice()].iter().map(|s| s.to_vec()).collect();
+        let search_plan = plan(&insts);
 
         // "aab" という文字列をマッチングするテスト
-        let actual1: bool = match_line(&insts, &first_strings, b"aab", true, false).unwrap();
+        let actual1: bool = match_line(&insts, &search_plan, b"aab", false, true, false).unwrap();
         assert!(actual1);
 
         // "xabcd" という文字列をマッチングするテスト
-        let actual2: bool = match_line(&insts, &first_strings, b"xabcd", true, false).unwrap();
+        let actual2: bool = match_line(&insts, &search_plan, b"xabcd", false, true, false).unwrap();
         assert!(!actual2);
     }
 
@@ -386,13 +397,13 @@ mod tests {
             Instruction::Char(Char::Literal(b'b')),
             Instruction::Match,
         ];
-        let first_strings: BTreeSet<Vec<u8>> = [b"a".as_slice()].iter().map(|s| s.to_vec()).collect();
+        let search_plan = plan(&insts);
         // "ab" という文字列をマッチングするテスト
-        let actual1: bool = match_line(&insts, &first_strings, b"ab", false, true).unwrap();
+        let actual1: bool = match_line(&insts, &search_plan, b"ab", false, false, true).unwrap();
         assert!(actual1);
 
         // "abc" という文字列をマッチングするテスト
-        let actual2: bool = match_line(&insts, &first_strings, b"abc", false, true).unwrap();
+        let actual2: bool = match_line(&insts, &search_plan, b"abc", false, false, true).unwrap();
         assert!(!actual2);
     }
 
@@ -424,18 +435,114 @@ mod tests {
     fn test_match_empty_line() {
         // "^$" というパターンで空行をマッチングするテスト
         let (code, is_caret, is_dollar) = compile_pattern("^$").unwrap();
-        let first_strings: BTreeSet<Vec<u8>> = BTreeSet::new();
+        let search_plan = build_search_plan(&code);
 
         // 空文字列とマッチするテスト
-        let actual1: bool = match_line(&code, &first_strings, b"", is_caret, is_dollar).unwrap();
+        let actual1: bool =
+            match_line(&code, &search_plan, b"", false, is_caret, is_dollar).unwrap();
         assert!(actual1);
 
         // 非空文字列とマッチしないテスト
-        let actual2: bool = match_line(&code, &first_strings, b"test", is_caret, is_dollar).unwrap();
+        let actual2: bool =
+            match_line(&code, &search_plan, b"test", false, is_caret, is_dollar).unwrap();
         assert!(!actual2);
 
         // スペースを含む文字列とマッチしないテスト
-        let actual3: bool = match_line(&code, &first_strings, b" ", is_caret, is_dollar).unwrap();
+        let actual3: bool =
+            match_line(&code, &search_plan, b" ", false, is_caret, is_dollar).unwrap();
         assert!(!actual3);
+    }
+
+    #[test]
+    fn test_match_line_ignore_case_ascii() {
+        let (code, is_caret, is_dollar) = compile_pattern("ab").unwrap();
+        let search_plan = build_search_plan(&code);
+
+        let actual = match_line(&code, &search_plan, b"AB", true, is_caret, is_dollar).unwrap();
+        assert!(actual);
+    }
+
+    #[test]
+    fn test_regression_or_branches() {
+        let (code, is_caret, is_dollar) = compile_pattern("a|b|c").unwrap();
+        let search_plan = build_search_plan(&code);
+
+        assert!(match_line(&code, &search_plan, b"a", false, is_caret, is_dollar).unwrap());
+        assert!(match_line(&code, &search_plan, b"b", false, is_caret, is_dollar).unwrap());
+        assert!(match_line(&code, &search_plan, b"c", false, is_caret, is_dollar).unwrap());
+    }
+
+    #[test]
+    fn test_regression_empty_match_non_anchored() {
+        let (star_code, star_caret, star_dollar) = compile_pattern("a*").unwrap();
+        let star_plan = build_search_plan(&star_code);
+        assert!(match_line(&star_code, &star_plan, b"", false, star_caret, star_dollar).unwrap());
+        assert!(
+            match_line(
+                &star_code,
+                &star_plan,
+                b"bbb",
+                false,
+                star_caret,
+                star_dollar
+            )
+            .unwrap()
+        );
+
+        let (question_code, question_caret, question_dollar) = compile_pattern("a?").unwrap();
+        let question_plan = build_search_plan(&question_code);
+        assert!(
+            match_line(
+                &question_code,
+                &question_plan,
+                b"",
+                false,
+                question_caret,
+                question_dollar
+            )
+            .unwrap()
+        );
+    }
+
+    #[test]
+    fn test_match_line_non_utf8_input() {
+        let (code, is_caret, is_dollar) = compile_pattern("ab").unwrap();
+        let search_plan = build_search_plan(&code);
+        let input = [0xFF, b'a', b'b'];
+        let actual = match_line(&code, &search_plan, &input, false, is_caret, is_dollar).unwrap();
+        assert!(actual);
+    }
+
+    #[test]
+    #[ignore]
+    fn test_perf_match_line_cases() {
+        use std::{hint::black_box, time::Instant};
+
+        fn bench_case(pattern: &str, input: &[u8], loops: usize) {
+            let (code, is_caret, is_dollar) = compile_pattern(pattern).unwrap();
+            let search_plan = build_search_plan(&code);
+
+            let start = Instant::now();
+            let mut matched = 0usize;
+            for _ in 0..loops {
+                if match_line(&code, &search_plan, input, false, is_caret, is_dollar).unwrap() {
+                    matched += 1;
+                }
+            }
+            let elapsed = start.elapsed();
+            eprintln!(
+                "[perf] pattern={pattern:?} loops={loops} matched={matched} elapsed_ms={}",
+                elapsed.as_millis()
+            );
+            black_box((matched, elapsed));
+        }
+
+        let long_input = vec![b'x'; 20_000];
+        bench_case("abcde", &long_input, 200);
+        bench_case("a|b|c|d|e|f|g|h|i|j", &long_input, 200);
+
+        let mut binary_input = vec![0xFF; 20_000];
+        binary_input.extend_from_slice(b"ab");
+        bench_case("ab$", &binary_input, 200);
     }
 }

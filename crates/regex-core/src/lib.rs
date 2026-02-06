@@ -1,6 +1,4 @@
-use std::collections::BTreeSet;
-
-use engine::instruction::{Char, Instruction};
+use engine::search_plan::SearchPlan;
 
 mod engine;
 pub mod error;
@@ -15,8 +13,8 @@ pub mod error;
 /// * is_caret -> 行頭からのマッチングをするかどうか
 /// * is_dollar -> 行末からのマッチングをするかどうか
 pub struct Regex {
-    code: Vec<Instruction>,
-    first_strings: BTreeSet<Vec<u8>>,
+    code: Vec<engine::instruction::Instruction>,
+    search_plan: SearchPlan,
     is_ignore_case: bool,
     is_invert_match: bool,
     is_caret: bool,
@@ -48,11 +46,11 @@ impl Regex {
             engine::compile_pattern(pattern)?
         };
 
-        let first_strings = Self::get_first_strings(&code);
+        let search_plan = engine::build_search_plan(&code);
 
         Ok(Regex {
             code,
-            first_strings,
+            search_plan,
             is_ignore_case,
             is_invert_match,
             is_caret,
@@ -95,75 +93,28 @@ impl Regex {
     ///
     /// is_ignore_case が true の場合、ASCII のみを対象に大小文字を無視します。
     pub fn is_match_bytes(&self, line: &[u8]) -> Result<bool, error::RegexError> {
-        let is_match = if self.is_ignore_case {
-            // 大小文字を区別しない場合、行を ASCII 小文字にしてマッチングする
-            let lowercase_line = Self::to_ascii_lowercase_bytes(line);
-            engine::match_line(
-                &self.code,
-                &self.first_strings,
-                &lowercase_line,
-                self.is_caret,
-                self.is_dollar,
-            )?
-        } else {
-            engine::match_line(
-                &self.code,
-                &self.first_strings,
-                line,
-                self.is_caret,
-                self.is_dollar,
-            )?
-        };
+        let is_match = engine::match_line(
+            &self.code,
+            &self.search_plan,
+            line,
+            self.is_ignore_case,
+            self.is_caret,
+            self.is_dollar,
+        )?;
         Ok(is_match ^ self.is_invert_match)
     }
 
     /// ASCII 文字列を小文字に変換するヘルパー関数
     fn to_ascii_lowercase(s: &str) -> String {
         s.chars()
-            .map(|c| if c.is_ascii() { c.to_ascii_lowercase() } else { c })
-            .collect()
-    }
-
-    /// ASCII バイト列を小文字に変換するヘルパー関数
-    fn to_ascii_lowercase_bytes(bytes: &[u8]) -> Vec<u8> {
-        bytes.iter().map(|&b| b.to_ascii_lowercase()).collect()
-    }
-
-    fn get_first_strings(insts: &[Instruction]) -> BTreeSet<Vec<u8>> {
-        let mut first_strings: BTreeSet<Vec<u8>> = BTreeSet::new();
-        match insts.first() {
-            Some(Instruction::Char(Char::Literal(_))) => {
-                if let Some(bytes) = Self::get_string(insts, 0) {
-                    first_strings.insert(bytes);
-                };
-            }
-            Some(Instruction::Split(left, right)) => {
-                if let Some(bytes) = Self::get_string(insts, *left) {
-                    first_strings.insert(bytes);
-                };
-                if let Some(bytes) = Self::get_string(insts, *right) {
-                    first_strings.insert(bytes);
-                };
-            }
-            _ => {} // Jump や Match になることはないため、何もしない
-        };
-        first_strings
-    }
-
-    fn get_string(insts: &[Instruction], mut start: usize) -> Option<Vec<u8>> {
-        let mut bytes: Vec<u8> = Vec::new();
-
-        while start < insts.len() {
-            match insts.get(start) {
-                Some(Instruction::Char(Char::Literal(b))) => {
-                    bytes.push(*b);
-                    start += 1;
+            .map(|c| {
+                if c.is_ascii() {
+                    c.to_ascii_lowercase()
+                } else {
+                    c
                 }
-                _ => break,
-            }
-        }
-
-        if bytes.is_empty() { None } else { Some(bytes) }
+            })
+            .collect()
     }
 }
 
@@ -270,65 +221,6 @@ mod tests {
         let line = "abe";
         let result = regex.is_match(line).unwrap();
         assert!(result);
-    }
-
-    #[test]
-    fn test_get_first_strings() {
-        // "abc" のテスト
-        let insts: Vec<Instruction> = vec![
-            Instruction::Char(Char::Literal(b'a')),
-            Instruction::Char(Char::Literal(b'b')),
-            Instruction::Char(Char::Literal(b'c')),
-            Instruction::Match,
-        ];
-        let first_strings = Regex::get_first_strings(&insts);
-        assert_eq!(first_strings.len(), 1);
-        assert!(first_strings.contains(&b"abc".to_vec()));
-
-        // "a*bc" のテスト
-        let insts: Vec<Instruction> = vec![
-            Instruction::Split(1, 3),
-            Instruction::Char(Char::Literal(b'a')),
-            Instruction::Jump(0),
-            Instruction::Char(Char::Literal(b'b')),
-            Instruction::Char(Char::Literal(b'c')),
-            Instruction::Match,
-        ];
-        let first_strings = Regex::get_first_strings(&insts);
-        assert_eq!(first_strings.len(), 2);
-        assert!(first_strings.contains(&b"a".to_vec()));
-        assert!(first_strings.contains(&b"bc".to_vec()));
-
-        // 以下のテストは実際にはありえないが、テストのために用意
-
-        // 命令列の先頭が Jump のテスト
-        let insts: Vec<Instruction> = vec![
-            Instruction::Jump(1),
-            Instruction::Char(Char::Literal(b'a')),
-            Instruction::Char(Char::Literal(b'b')),
-            Instruction::Match,
-        ];
-        let first_strings = Regex::get_first_strings(&insts);
-        assert_eq!(first_strings.len(), 0);
-
-        // 命令列の先頭が Match のテスト
-        let insts: Vec<Instruction> = vec![
-            Instruction::Match,
-            Instruction::Char(Char::Literal(b'a')),
-            Instruction::Char(Char::Literal(b'b')),
-        ];
-        let first_strings = Regex::get_first_strings(&insts);
-        assert_eq!(first_strings.len(), 0);
-    }
-
-    #[test]
-    fn test_get_string() {
-        // "ED*vQYpl" のテスト
-        let regex = Regex::new("ED*vQYpl", false, false).unwrap();
-        let insts = regex.code;
-        let first_strings = Regex::get_first_strings(&insts);
-        assert_eq!(first_strings.len(), 1);
-        assert!(first_strings.contains(&b"E".to_vec()))
     }
 
     #[test]
@@ -451,58 +343,28 @@ mod tests {
     }
 
     #[test]
-    fn test_get_first_strings_edge_cases() {
-        // get_first_strings の境界ケース
-
-        // AnyChar で始まるパターン
-        let insts: Vec<Instruction> = vec![
-            Instruction::Char(Char::Any),
-            Instruction::Char(Char::Literal(b'a')),
-            Instruction::Match,
-        ];
-        let first_strings = Regex::get_first_strings(&insts);
-        assert_eq!(first_strings.len(), 0);
-
-        // 空の命令列
-        let insts: Vec<Instruction> = vec![];
-        let first_strings = Regex::get_first_strings(&insts);
-        assert_eq!(first_strings.len(), 0);
-
-        // Split で始まり、両方の分岐が Literal
-        let insts: Vec<Instruction> = vec![
-            Instruction::Split(1, 3),
-            Instruction::Char(Char::Literal(b'a')),
-            Instruction::Jump(5),
-            Instruction::Char(Char::Literal(b'b')),
-            Instruction::Char(Char::Literal(b'c')),
-            Instruction::Match,
-        ];
-        let first_strings = Regex::get_first_strings(&insts);
-        assert_eq!(first_strings.len(), 2);
-        assert!(first_strings.contains(&b"a".to_vec()));
-        assert!(first_strings.contains(&b"bc".to_vec()));
+    fn test_regression_or_branches() {
+        let regex = Regex::new("a|b|c", false, false).unwrap();
+        assert!(regex.is_match("a").unwrap());
+        assert!(regex.is_match("b").unwrap());
+        assert!(regex.is_match("c").unwrap());
     }
 
     #[test]
-    fn test_get_string_edge_cases() {
-        // get_string の境界ケース
+    fn test_regression_empty_match_non_anchored() {
+        let star = Regex::new("a*", false, false).unwrap();
+        assert!(star.is_match("").unwrap());
+        assert!(star.is_match("bbb").unwrap());
 
-        // 範囲外のインデックス
-        let insts: Vec<Instruction> =
-            vec![Instruction::Char(Char::Literal(b'a')), Instruction::Match];
-        let result = Regex::get_string(&insts, 10);
-        assert_eq!(result, None);
+        let question = Regex::new("a?", false, false).unwrap();
+        assert!(question.is_match("").unwrap());
+        assert!(question.is_match("bbb").unwrap());
+    }
 
-        // Literal以外の命令で始まる
-        let insts: Vec<Instruction> =
-            vec![Instruction::Match, Instruction::Char(Char::Literal(b'a'))];
-        let result = Regex::get_string(&insts, 0);
-        assert_eq!(result, None);
-
-        // 単一のLiteral文字
-        let insts: Vec<Instruction> =
-            vec![Instruction::Char(Char::Literal(b'x')), Instruction::Match];
-        let result = Regex::get_string(&insts, 0);
-        assert_eq!(result, Some(b"x".to_vec()));
+    #[test]
+    fn test_regression_non_utf8_input() {
+        let regex = Regex::new("ab", false, false).unwrap();
+        let input = [0xFF, b'a', b'b'];
+        assert!(regex.is_match_bytes(&input).unwrap());
     }
 }

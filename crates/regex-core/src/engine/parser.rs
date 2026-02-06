@@ -87,7 +87,7 @@ fn fold_or(mut seq_or: Vec<Ast>) -> Option<Ast> {
 }
 
 /// 式をパースし、Astを生成
-/// 
+///
 /// 注意: このパーサーは ASCII 正規表現パターンを前提としています。
 /// バイト列として処理しますが、エラー位置は文字位置として報告します。
 /// ASCII 外の文字を含むパターンの場合、エラー位置がバイト位置と
@@ -137,7 +137,9 @@ pub fn parse(pattern: &str) -> Result<Ast, ParseError> {
                 stack.push((prev, prev_or));
             }
             b')' => {
-                let (mut prev, prev_or) = stack.pop().ok_or(ParseError::InvalidRightParen(current_pos))?;
+                let (mut prev, prev_or) = stack
+                    .pop()
+                    .ok_or(ParseError::InvalidRightParen(current_pos))?;
                 if !seq.is_empty() {
                     seq_or.push(Ast::Seq(seq));
                 }

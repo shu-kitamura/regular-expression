@@ -10,18 +10,47 @@ use crate::{
     error::EvalError,
 };
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct EvalOptions {
+    pub is_end_dollar: bool,
+    pub ignore_case_ascii: bool,
+}
+
+#[derive(Default, Debug)]
+pub struct EvalScratch {
+    visited: HashSet<(usize, usize)>,
+}
+
+impl EvalScratch {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn clear(&mut self) {
+        self.visited.clear();
+    }
+}
+
 /// バイトと Instruction を評価する
-/// 
+///
 /// 注意: バイト指向の実装のため、`Char::Any` は任意の1バイトにマッチします。
 /// これは UTF-8 のマルチバイト文字の途中にもマッチする可能性がありますが、
 /// バイト指向の正規表現エンジンとしては正しい動作です。
-fn eval_char(inst: &Char, input: &[u8], index: usize) -> bool {
+fn eval_char(inst: &Char, input: &[u8], index: usize, ignore_case_ascii: bool) -> bool {
     let inst_byte = match inst {
         Char::Literal(b) => *b,
         Char::Any => return input.get(index).is_some(), // 任意の1バイトにマッチ
     };
 
-    input.get(index) == Some(&inst_byte)
+    let Some(input_byte) = input.get(index).copied() else {
+        return false;
+    };
+
+    if ignore_case_ascii {
+        input_byte.eq_ignore_ascii_case(&inst_byte)
+    } else {
+        input_byte == inst_byte
+    }
 }
 
 /// プログラムカウンタとバイト配列のインデックスをインクリメントする
@@ -36,10 +65,14 @@ fn eval_depth(
     input: &[u8],
     mut p_counter: usize,
     mut char_index: usize,
-    is_end_dollar: bool,
-    visited: &mut HashSet<(usize, usize)>,
+    options: EvalOptions,
+    scratch: &mut EvalScratch,
 ) -> Result<bool, EvalError> {
     loop {
+        if !scratch.visited.insert((p_counter, char_index)) {
+            return Ok(false);
+        }
+
         // Instruction を取得
         let instruction: &Instruction = match instructions.get(p_counter) {
             Some(inst) => inst,
@@ -49,14 +82,14 @@ fn eval_depth(
         // Instruction の型に応じて、評価を実行。
         match instruction {
             Instruction::Char(inst_char) => {
-                if eval_char(inst_char, input, char_index) {
+                if eval_char(inst_char, input, char_index, options.ignore_case_ascii) {
                     increment_pc_and_index(&mut p_counter, &mut char_index)?;
                 } else {
                     return Ok(false);
                 };
             }
             Instruction::Match => {
-                if is_end_dollar {
+                if options.is_end_dollar {
                     return Ok(input.len() == char_index);
                 } else {
                     return Ok(true);
@@ -64,52 +97,49 @@ fn eval_depth(
             }
             Instruction::Jump(addr) => p_counter = *addr,
             Instruction::Split(addr1, addr2) => {
-                // すでに訪れた状態の場合、無限ループを避けるために false を返す
-                if !visited.insert((*addr1, char_index)) {
-                    return Ok(false);
-                }
-
                 // 1つ目の Split を評価する
-                if eval_depth(
-                    instructions,
-                    input,
-                    *addr1,
-                    char_index,
-                    is_end_dollar,
-                    visited,
-                )? {
+                if eval_depth(instructions, input, *addr1, char_index, options, scratch)? {
                     return Ok(true);
                 }
 
                 // 1つ目の Split が失敗した場合、2つ目の Split を評価する
-                return eval_depth(
-                    instructions,
-                    input,
-                    *addr2,
-                    char_index,
-                    is_end_dollar,
-                    visited,
-                );
+                return eval_depth(instructions, input, *addr2, char_index, options, scratch);
             }
         }
     }
 }
 
+pub fn eval_from(
+    inst: &[Instruction],
+    input: &[u8],
+    start_index: usize,
+    options: EvalOptions,
+    scratch: &mut EvalScratch,
+) -> Result<bool, EvalError> {
+    scratch.clear();
+    eval_depth(inst, input, 0, start_index, options, scratch)
+}
+
 /// 命令列の評価を行う関数
 pub fn eval(inst: &[Instruction], input: &[u8], is_end_dollar: bool) -> Result<bool, EvalError> {
-    let mut visited = HashSet::new();
-    eval_depth(inst, input, 0, 0, is_end_dollar, &mut visited)
+    let mut scratch = EvalScratch::new();
+    let options = EvalOptions {
+        is_end_dollar,
+        ignore_case_ascii: false,
+    };
+    eval_from(inst, input, 0, options, &mut scratch)
 }
 
 // ----- テストコード -----
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashSet;
-
     use crate::{
         engine::{
-            evaluator::{eval_char, eval_depth, increment_pc_and_index},
+            evaluator::{
+                EvalOptions, EvalScratch, eval, eval_char, eval_depth, eval_from,
+                increment_pc_and_index,
+            },
             instruction::{Char, Instruction},
         },
         error::EvalError,
@@ -117,23 +147,32 @@ mod tests {
 
     #[test]
     fn test_eval_char_true() {
-        let actual: bool = eval_char(&Char::Literal(b'a'), b"abc", 0);
+        let actual: bool = eval_char(&Char::Literal(b'a'), b"abc", 0, false);
         assert!(actual);
     }
 
     #[test]
     fn test_eval_char_false() {
-        let actual1: bool = eval_char(&Char::Literal(b'a'), b"abc", 1);
+        let actual1: bool = eval_char(&Char::Literal(b'a'), b"abc", 1, false);
         assert!(!actual1);
 
-        let actual2: bool = eval_char(&Char::Literal(b'a'), b"abc", 10);
+        let actual2: bool = eval_char(&Char::Literal(b'a'), b"abc", 10, false);
         assert!(!actual2);
     }
 
     #[test]
     fn test_eval_char_any() {
-        let actual: bool = eval_char(&Char::Any, b"abc", 0);
+        let actual: bool = eval_char(&Char::Any, b"abc", 0, false);
         assert!(actual);
+    }
+
+    #[test]
+    fn test_eval_char_ignore_case_ascii() {
+        let actual: bool = eval_char(&Char::Literal(b'a'), b"A", 0, true);
+        assert!(actual);
+
+        let actual: bool = eval_char(&Char::Literal(b'a'), b"A", 0, false);
+        assert!(!actual);
     }
 
     #[test]
@@ -174,13 +213,17 @@ mod tests {
         ];
 
         // b"abc" とマッチするケース
-        let mut visited1: HashSet<(usize, usize)> = HashSet::new();
-        let actual1 = eval_depth(&insts, b"abc", 0, 0, false, &mut visited1).unwrap();
+        let mut scratch1 = EvalScratch::new();
+        let options = EvalOptions {
+            is_end_dollar: false,
+            ignore_case_ascii: false,
+        };
+        let actual1 = eval_depth(&insts, b"abc", 0, 0, options, &mut scratch1).unwrap();
         assert!(actual1);
 
         // b"abd"とマッチするケース
-        let mut visited2: HashSet<(usize, usize)> = HashSet::new();
-        let actual2 = eval_depth(&insts, b"abc", 0, 0, false, &mut visited2).unwrap();
+        let mut scratch2 = EvalScratch::new();
+        let actual2 = eval_depth(&insts, b"abc", 0, 0, options, &mut scratch2).unwrap();
         assert!(actual2);
     }
 
@@ -198,8 +241,12 @@ mod tests {
         ];
 
         // "abx" とマッチするケース
-        let mut visited: HashSet<(usize, usize)> = HashSet::new();
-        let actual = eval_depth(&insts, b"abX", 0, 0, false, &mut visited).unwrap();
+        let mut scratch = EvalScratch::new();
+        let options = EvalOptions {
+            is_end_dollar: false,
+            ignore_case_ascii: false,
+        };
+        let actual = eval_depth(&insts, b"abX", 0, 0, options, &mut scratch).unwrap();
         assert!(!actual);
     }
 
@@ -217,13 +264,17 @@ mod tests {
         ];
 
         // "xxxabc" とマッチするケース (true になる)
-        let mut visited1: HashSet<(usize, usize)> = HashSet::new();
-        let actual1: bool = eval_depth(&insts, b"abc", 0, 0, true, &mut visited1).unwrap();
+        let options = EvalOptions {
+            is_end_dollar: true,
+            ignore_case_ascii: false,
+        };
+        let mut scratch1 = EvalScratch::new();
+        let actual1: bool = eval_depth(&insts, b"abc", 0, 0, options, &mut scratch1).unwrap();
         assert!(actual1);
 
         // b"abcxxx"とマッチするケース (false になる)
-        let mut visited2: HashSet<(usize, usize)> = HashSet::new();
-        let actual2: bool = eval_depth(&insts, b"abcxxx", 0, 0, true, &mut visited2).unwrap();
+        let mut scratch2 = EvalScratch::new();
+        let actual2: bool = eval_depth(&insts, b"abcxxx", 0, 0, options, &mut scratch2).unwrap();
         assert!(!actual2);
     }
 
@@ -243,13 +294,17 @@ mod tests {
         ];
 
         // b"abcde" とマッチするケース（true）
-        let mut visited1: HashSet<(usize, usize)> = HashSet::new();
-        let actual1 = eval_depth(&insts, b"abcde", 0, 0, false, &mut visited1).unwrap();
+        let options = EvalOptions {
+            is_end_dollar: false,
+            ignore_case_ascii: false,
+        };
+        let mut scratch1 = EvalScratch::new();
+        let actual1 = eval_depth(&insts, b"abcde", 0, 0, options, &mut scratch1).unwrap();
         assert!(actual1);
 
         // b"bcdef" とマッチするケース（false）
-        let mut visited2: HashSet<(usize, usize)> = HashSet::new();
-        let actual2 = eval_depth(&insts, b"bcdef", 0, 0, false, &mut visited2).unwrap();
+        let mut scratch2 = EvalScratch::new();
+        let actual2 = eval_depth(&insts, b"bcdef", 0, 0, options, &mut scratch2).unwrap();
         assert!(!actual2);
     }
 
@@ -260,8 +315,41 @@ mod tests {
             Instruction::Char(Char::Literal(b'b')),
             Instruction::Match,
         ];
-        let mut visited: HashSet<(usize, usize)> = HashSet::new();
-        let actual = eval_depth(&insts, b"abcd", usize::MAX, 0, false, &mut visited);
+        let mut scratch = EvalScratch::new();
+        let options = EvalOptions {
+            is_end_dollar: false,
+            ignore_case_ascii: false,
+        };
+        let actual = eval_depth(&insts, b"abcd", usize::MAX, 0, options, &mut scratch);
         assert_eq!(actual, Err(EvalError::InvalidPC));
+    }
+
+    #[test]
+    fn test_eval_from_start_index() {
+        let insts: Vec<Instruction> = vec![
+            Instruction::Char(Char::Literal(b'a')),
+            Instruction::Char(Char::Literal(b'b')),
+            Instruction::Match,
+        ];
+        let mut scratch = EvalScratch::new();
+        let options = EvalOptions {
+            is_end_dollar: true,
+            ignore_case_ascii: false,
+        };
+
+        let actual = eval_from(&insts, b"zab", 1, options, &mut scratch).unwrap();
+        assert!(actual);
+    }
+
+    #[test]
+    fn test_eval_wrapper() {
+        let insts: Vec<Instruction> = vec![
+            Instruction::Char(Char::Literal(b'a')),
+            Instruction::Char(Char::Literal(b'b')),
+            Instruction::Match,
+        ];
+
+        let actual = eval(&insts, b"ab", true).unwrap();
+        assert!(actual);
     }
 }
