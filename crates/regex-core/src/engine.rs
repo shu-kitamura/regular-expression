@@ -1,22 +1,22 @@
 //! マッチングを行う関数を定義
 mod ast;
-mod compiler_v2;
-mod evaluator_v2;
-mod instruction_v2;
-mod parser_v2;
+mod compiler;
+mod evaluator;
+mod instruction;
+mod parser;
 
 use thiserror::Error;
 
 use crate::engine::{
-    compiler_v2::compile_v2,
-    evaluator_v2::{eval_v2, eval_v2_from_start},
-    parser_v2::parse,
+    compiler::compile,
+    evaluator::{eval, eval_from_start},
+    parser::parse,
 };
 
-pub use compiler_v2::CompileV2Error as CompileError;
-pub use evaluator_v2::EvalV2Error as EvalError;
-pub use instruction_v2::InstructionV2;
-pub use parser_v2::ParseError;
+pub use compiler::CompileError;
+pub use evaluator::EvalError;
+pub use instruction::Instruction;
+pub use parser::ParseError;
 
 #[derive(Debug, Error, PartialEq)]
 pub enum RegexError {
@@ -54,26 +54,26 @@ where
 }
 
 /// v2 パターンをパースしてコンパイルする。
-pub fn compile_pattern(pattern: &str) -> Result<Vec<InstructionV2>, RegexError> {
+pub fn compile_pattern(pattern: &str) -> Result<Vec<Instruction>, RegexError> {
     let ast = parse(pattern)?;
-    let instructions = compile_v2(&ast)?;
+    let instructions = compile(&ast)?;
     Ok(instructions)
 }
 
-/// v2 命令列と文字列のマッチングを実行する。
-pub fn match_line(code: &[InstructionV2], line: &str) -> Result<bool, RegexError> {
-    Ok(eval_v2(code, line)?)
+/// 命令列と文字列のマッチングを実行する。
+pub fn match_line(code: &[Instruction], line: &str) -> Result<bool, RegexError> {
+    Ok(eval(code, line)?)
 }
 
-/// v2 命令列で文字列先頭からのマッチングを実行する。
-pub fn match_line_from_start(code: &[InstructionV2], line: &str) -> Result<bool, RegexError> {
-    Ok(eval_v2_from_start(code, line)?)
+/// 命令列で文字列先頭からのマッチングを実行する。
+pub fn match_line_from_start(code: &[Instruction], line: &str) -> Result<bool, RegexError> {
+    Ok(eval_from_start(code, line)?)
 }
 
 #[cfg(test)]
 mod tests {
     use crate::engine::{
-        CompileError, RegexError, compile_pattern, instruction_v2::InstructionV2, match_line,
+        CompileError, RegexError, compile_pattern, instruction::Instruction, match_line,
         match_line_from_start,
     };
 
@@ -81,7 +81,7 @@ mod tests {
     fn test_compile_pattern_literal() {
         let code = compile_pattern("abc").unwrap();
         assert_eq!(code.len(), 4);
-        assert!(matches!(code.last(), Some(InstructionV2::Match)));
+        assert!(matches!(code.last(), Some(Instruction::Match)));
     }
 
     #[test]

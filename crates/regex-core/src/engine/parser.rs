@@ -1,4 +1,4 @@
-//! Experimental parser (v2) based on the Moonbit implementation.
+//! Regex parser based on the Moonbit implementation.
 //!
 //! This module is currently not wired into the engine. It provides
 //! a standalone parser that returns `Ast`.

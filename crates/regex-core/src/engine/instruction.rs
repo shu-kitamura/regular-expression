@@ -1,13 +1,13 @@
-//! compiler_v2 / evaluator_v2 で使用する命令セット。
+//! compiler / evaluator で使用する命令セット。
 #![allow(dead_code)]
 
 use std::fmt::{self, Display};
 
 use crate::engine::ast::{CharClass, Predicate};
 
-/// v2 系で使用する命令。
+/// 使用する命令。
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum InstructionV2 {
+pub enum Instruction {
     CharClass(CharClass),
     Assert(Predicate),
     SaveStart(usize),
@@ -18,10 +18,10 @@ pub enum InstructionV2 {
     Match,
 }
 
-impl Display for InstructionV2 {
+impl Display for Instruction {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            InstructionV2::CharClass(class) => {
+            Instruction::CharClass(class) => {
                 let neg = if class.negated { "^" } else { "" };
                 write!(f, "charclass {neg}[")?;
                 for (i, range) in class.ranges.iter().enumerate() {
@@ -32,13 +32,13 @@ impl Display for InstructionV2 {
                 }
                 write!(f, "]")
             }
-            InstructionV2::Assert(predicate) => write!(f, "assert {predicate:?}"),
-            InstructionV2::SaveStart(index) => write!(f, "save_start {index}"),
-            InstructionV2::SaveEnd(index) => write!(f, "save_end {index}"),
-            InstructionV2::Backref(index) => write!(f, "backref {index}"),
-            InstructionV2::Split(addr1, addr2) => write!(f, "split {addr1:>04}, {addr2:>04}"),
-            InstructionV2::Jump(addr) => write!(f, "jump {addr:>04}"),
-            InstructionV2::Match => write!(f, "match"),
+            Instruction::Assert(predicate) => write!(f, "assert {predicate:?}"),
+            Instruction::SaveStart(index) => write!(f, "save_start {index}"),
+            Instruction::SaveEnd(index) => write!(f, "save_end {index}"),
+            Instruction::Backref(index) => write!(f, "backref {index}"),
+            Instruction::Split(addr1, addr2) => write!(f, "split {addr1:>04}, {addr2:>04}"),
+            Instruction::Jump(addr) => write!(f, "jump {addr:>04}"),
+            Instruction::Match => write!(f, "match"),
         }
     }
 }
@@ -47,11 +47,11 @@ impl Display for InstructionV2 {
 mod tests {
     use crate::engine::{
         ast::{CharClass, CharRange, Predicate},
-        instruction_v2::InstructionV2,
+        instruction::Instruction,
     };
 
     #[test]
-    fn test_instruction_v2_fmt() {
+    fn test_instruction_fmt() {
         let class = CharClass::new(
             vec![
                 CharRange {
@@ -67,26 +67,23 @@ mod tests {
         );
 
         assert_eq!(
-            format!("{}", InstructionV2::CharClass(class)),
+            format!("{}", Instruction::CharClass(class)),
             "charclass [a-z,0-9]"
         );
         assert_eq!(
-            format!("{}", InstructionV2::Assert(Predicate::StartOfLine)),
+            format!("{}", Instruction::Assert(Predicate::StartOfLine)),
             "assert StartOfLine"
         );
-        assert_eq!(format!("{}", InstructionV2::SaveStart(1)), "save_start 1");
-        assert_eq!(format!("{}", InstructionV2::SaveEnd(1)), "save_end 1");
-        assert_eq!(format!("{}", InstructionV2::Backref(1)), "backref 1");
-        assert_eq!(
-            format!("{}", InstructionV2::Split(2, 10)),
-            "split 0002, 0010"
-        );
-        assert_eq!(format!("{}", InstructionV2::Jump(10)), "jump 0010");
-        assert_eq!(format!("{}", InstructionV2::Match), "match");
+        assert_eq!(format!("{}", Instruction::SaveStart(1)), "save_start 1");
+        assert_eq!(format!("{}", Instruction::SaveEnd(1)), "save_end 1");
+        assert_eq!(format!("{}", Instruction::Backref(1)), "backref 1");
+        assert_eq!(format!("{}", Instruction::Split(2, 10)), "split 0002, 0010");
+        assert_eq!(format!("{}", Instruction::Jump(10)), "jump 0010");
+        assert_eq!(format!("{}", Instruction::Match), "match");
     }
 
     #[test]
-    fn test_instruction_v2_fmt_negated_class() {
+    fn test_instruction_fmt_negated_class() {
         let class = CharClass::new(
             vec![CharRange {
                 start: 'a',
@@ -95,7 +92,7 @@ mod tests {
             true,
         );
         assert_eq!(
-            format!("{}", InstructionV2::CharClass(class)),
+            format!("{}", Instruction::CharClass(class)),
             "charclass ^[a-a]"
         );
     }

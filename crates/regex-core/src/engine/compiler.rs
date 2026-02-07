@@ -1,89 +1,81 @@
-//! Ast(v2) を命令列(InstructionV2)へコンパイルする。
+//! Ast を命令列(Instruction)へコンパイルする。
 #![allow(dead_code)]
 
 use thiserror::Error;
 
-use crate::engine::{ast::Ast, instruction_v2::InstructionV2, safe_add};
+use crate::engine::{ast::Ast, instruction::Instruction, safe_add};
 
 #[derive(Debug, Error, PartialEq, Eq)]
-pub enum CompileV2Error {
-    #[error("CompileV2Error: PCOverFlow")]
+pub enum CompileError {
+    #[error("CompileError: PCOverFlow")]
     PCOverFlow,
-    #[error("CompileV2Error: InvalidBackreference({0})")]
+    #[error("CompileError: InvalidBackreference({0})")]
     InvalidBackreference(usize),
 }
 
 #[derive(Default, Debug)]
-struct CompilerV2 {
+struct Compiler {
     p_counter: usize,
-    instructions: Vec<InstructionV2>,
+    instructions: Vec<Instruction>,
 }
 
-impl CompilerV2 {
-    fn increment_p_counter(&mut self) -> Result<(), CompileV2Error> {
-        safe_add(&mut self.p_counter, &1, || CompileV2Error::PCOverFlow)
+impl Compiler {
+    fn increment_p_counter(&mut self) -> Result<(), CompileError> {
+        safe_add(&mut self.p_counter, &1, || CompileError::PCOverFlow)
     }
 
-    fn next_address(&self) -> Result<usize, CompileV2Error> {
+    fn next_address(&self) -> Result<usize, CompileError> {
         self.p_counter
             .checked_add(1)
-            .ok_or(CompileV2Error::PCOverFlow)
+            .ok_or(CompileError::PCOverFlow)
     }
 
-    fn push_instruction(&mut self, instruction: InstructionV2) -> Result<usize, CompileV2Error> {
+    fn push_instruction(&mut self, instruction: Instruction) -> Result<usize, CompileError> {
         let index = self.p_counter;
         self.increment_p_counter()?;
         self.instructions.push(instruction);
         Ok(index)
     }
 
-    fn patch_split_right(
-        &mut self,
-        split_index: usize,
-        target: usize,
-    ) -> Result<(), CompileV2Error> {
+    fn patch_split_right(&mut self, split_index: usize, target: usize) -> Result<(), CompileError> {
         match self.instructions.get_mut(split_index) {
-            Some(InstructionV2::Split(_, right)) => {
+            Some(Instruction::Split(_, right)) => {
                 *right = target;
                 Ok(())
             }
-            _ => Err(CompileV2Error::PCOverFlow),
+            _ => Err(CompileError::PCOverFlow),
         }
     }
 
-    fn patch_split_left(
-        &mut self,
-        split_index: usize,
-        target: usize,
-    ) -> Result<(), CompileV2Error> {
+    fn patch_split_left(&mut self, split_index: usize, target: usize) -> Result<(), CompileError> {
         match self.instructions.get_mut(split_index) {
-            Some(InstructionV2::Split(left, _)) => {
+            Some(Instruction::Split(left, _)) => {
                 *left = target;
                 Ok(())
             }
-            _ => Err(CompileV2Error::PCOverFlow),
+            _ => Err(CompileError::PCOverFlow),
         }
     }
 
-    fn patch_jump(&mut self, jump_index: usize, target: usize) -> Result<(), CompileV2Error> {
+    fn patch_jump(&mut self, jump_index: usize, target: usize) -> Result<(), CompileError> {
         match self.instructions.get_mut(jump_index) {
-            Some(InstructionV2::Jump(addr)) => {
+            Some(Instruction::Jump(addr)) => {
                 *addr = target;
                 Ok(())
             }
-            _ => Err(CompileV2Error::PCOverFlow),
+            _ => Err(CompileError::PCOverFlow),
         }
     }
 
-    fn gen_expr(&mut self, ast: &Ast) -> Result<(), CompileV2Error> {
+    fn gen_expr(&mut self, ast: &Ast) -> Result<(), CompileError> {
         match ast {
             Ast::Empty => Ok(()),
             Ast::CharClass(class) => {
-                self.push_instruction(InstructionV2::CharClass(class.clone()))?;
+                self.push_instruction(Instruction::CharClass(class.clone()))?;
                 Ok(())
             }
             Ast::Assertion(predicate) => {
-                self.push_instruction(InstructionV2::Assert(*predicate))?;
+                self.push_instruction(Instruction::Assert(*predicate))?;
                 Ok(())
             }
             Ast::Capture { expr, index } => self.gen_capture(expr, *index),
@@ -99,29 +91,29 @@ impl CompilerV2 {
             Ast::Concat(exprs) => self.gen_concat(exprs),
             Ast::Alternate(left, right) => self.gen_alternate(left, right),
             Ast::Backreference(index) => {
-                self.push_instruction(InstructionV2::Backref(*index))?;
+                self.push_instruction(Instruction::Backref(*index))?;
                 Ok(())
             }
         }
     }
 
-    fn gen_capture(&mut self, expr: &Ast, index: usize) -> Result<(), CompileV2Error> {
-        self.push_instruction(InstructionV2::SaveStart(index))?;
+    fn gen_capture(&mut self, expr: &Ast, index: usize) -> Result<(), CompileError> {
+        self.push_instruction(Instruction::SaveStart(index))?;
         self.gen_expr(expr)?;
-        self.push_instruction(InstructionV2::SaveEnd(index))?;
+        self.push_instruction(Instruction::SaveEnd(index))?;
         Ok(())
     }
 
-    fn gen_zero_or_more(&mut self, expr: &Ast, greedy: bool) -> Result<(), CompileV2Error> {
+    fn gen_zero_or_more(&mut self, expr: &Ast, greedy: bool) -> Result<(), CompileError> {
         let expr_entry = self.next_address()?;
         let split = if greedy {
-            InstructionV2::Split(expr_entry, 0)
+            Instruction::Split(expr_entry, 0)
         } else {
-            InstructionV2::Split(0, expr_entry)
+            Instruction::Split(0, expr_entry)
         };
         let split_index = self.push_instruction(split)?;
         self.gen_expr(expr)?;
-        self.push_instruction(InstructionV2::Jump(split_index))?;
+        self.push_instruction(Instruction::Jump(split_index))?;
 
         let out = self.p_counter;
         if greedy {
@@ -131,25 +123,25 @@ impl CompilerV2 {
         }
     }
 
-    fn gen_one_or_more(&mut self, expr: &Ast, greedy: bool) -> Result<(), CompileV2Error> {
+    fn gen_one_or_more(&mut self, expr: &Ast, greedy: bool) -> Result<(), CompileError> {
         let loop_entry = self.p_counter;
         self.gen_expr(expr)?;
 
         let out = self.next_address()?;
         if greedy {
-            self.push_instruction(InstructionV2::Split(loop_entry, out))?;
+            self.push_instruction(Instruction::Split(loop_entry, out))?;
         } else {
-            self.push_instruction(InstructionV2::Split(out, loop_entry))?;
+            self.push_instruction(Instruction::Split(out, loop_entry))?;
         }
         Ok(())
     }
 
-    fn gen_zero_or_one(&mut self, expr: &Ast, greedy: bool) -> Result<(), CompileV2Error> {
+    fn gen_zero_or_one(&mut self, expr: &Ast, greedy: bool) -> Result<(), CompileError> {
         let expr_entry = self.next_address()?;
         let split = if greedy {
-            InstructionV2::Split(expr_entry, 0)
+            Instruction::Split(expr_entry, 0)
         } else {
-            InstructionV2::Split(0, expr_entry)
+            Instruction::Split(0, expr_entry)
         };
         let split_index = self.push_instruction(split)?;
         self.gen_expr(expr)?;
@@ -168,7 +160,7 @@ impl CompilerV2 {
         greedy: bool,
         min: u32,
         max: Option<u32>,
-    ) -> Result<(), CompileV2Error> {
+    ) -> Result<(), CompileError> {
         for _ in 0..min {
             self.gen_expr(expr)?;
         }
@@ -187,19 +179,19 @@ impl CompilerV2 {
         }
     }
 
-    fn gen_concat(&mut self, exprs: &[Ast]) -> Result<(), CompileV2Error> {
+    fn gen_concat(&mut self, exprs: &[Ast]) -> Result<(), CompileError> {
         for expr in exprs {
             self.gen_expr(expr)?;
         }
         Ok(())
     }
 
-    fn gen_alternate(&mut self, left: &Ast, right: &Ast) -> Result<(), CompileV2Error> {
+    fn gen_alternate(&mut self, left: &Ast, right: &Ast) -> Result<(), CompileError> {
         let left_entry = self.next_address()?;
-        let split_index = self.push_instruction(InstructionV2::Split(left_entry, 0))?;
+        let split_index = self.push_instruction(Instruction::Split(left_entry, 0))?;
 
         self.gen_expr(left)?;
-        let jump_index = self.push_instruction(InstructionV2::Jump(0))?;
+        let jump_index = self.push_instruction(Instruction::Jump(0))?;
 
         let right_entry = self.p_counter;
         self.patch_split_right(split_index, right_entry)?;
@@ -209,8 +201,8 @@ impl CompilerV2 {
         self.patch_jump(jump_index, out)
     }
 
-    fn finish(mut self) -> Result<Vec<InstructionV2>, CompileV2Error> {
-        self.push_instruction(InstructionV2::Match)?;
+    fn finish(mut self) -> Result<Vec<Instruction>, CompileError> {
+        self.push_instruction(Instruction::Match)?;
         Ok(self.instructions)
     }
 }
@@ -228,11 +220,11 @@ fn max_capture_index(ast: &Ast) -> usize {
     }
 }
 
-fn validate_backreferences(ast: &Ast, max_capture: usize) -> Result<(), CompileV2Error> {
+fn validate_backreferences(ast: &Ast, max_capture: usize) -> Result<(), CompileError> {
     match ast {
         Ast::Backreference(index) => {
             if *index == 0 || *index > max_capture {
-                Err(CompileV2Error::InvalidBackreference(*index))
+                Err(CompileError::InvalidBackreference(*index))
             } else {
                 Ok(())
             }
@@ -256,11 +248,11 @@ fn validate_backreferences(ast: &Ast, max_capture: usize) -> Result<(), CompileV
     }
 }
 
-pub fn compile_v2(ast: &Ast) -> Result<Vec<InstructionV2>, CompileV2Error> {
+pub fn compile(ast: &Ast) -> Result<Vec<Instruction>, CompileError> {
     let max_capture = max_capture_index(ast);
     validate_backreferences(ast, max_capture)?;
 
-    let mut compiler = CompilerV2::default();
+    let mut compiler = Compiler::default();
     compiler.gen_expr(ast)?;
     compiler.finish()
 }
@@ -269,91 +261,86 @@ pub fn compile_v2(ast: &Ast) -> Result<Vec<InstructionV2>, CompileV2Error> {
 mod tests {
     use crate::engine::{
         ast::{CharClass, CharRange, Predicate},
-        compiler_v2::{CompileV2Error, compile_v2},
-        instruction_v2::InstructionV2,
-        parser_v2::parse,
+        compiler::{CompileError, compile},
+        instruction::Instruction,
+        parser::parse,
     };
 
-    fn literal(c: char) -> InstructionV2 {
-        InstructionV2::CharClass(CharClass::new(vec![CharRange { start: c, end: c }], false))
+    fn literal(c: char) -> Instruction {
+        Instruction::CharClass(CharClass::new(vec![CharRange { start: c, end: c }], false))
     }
 
     #[test]
-    fn test_compile_v2_literal() {
+    fn test_compile_literal() {
         let ast = parse("abc").unwrap();
-        let actual = compile_v2(&ast).unwrap();
-        let expect = vec![
-            literal('a'),
-            literal('b'),
-            literal('c'),
-            InstructionV2::Match,
-        ];
+        let actual = compile(&ast).unwrap();
+        let expect = vec![literal('a'), literal('b'), literal('c'), Instruction::Match];
         assert_eq!(actual, expect);
     }
 
     #[test]
-    fn test_compile_v2_alternate() {
+    fn test_compile_alternate() {
         let ast = parse("a|b").unwrap();
-        let actual = compile_v2(&ast).unwrap();
+        let actual = compile(&ast).unwrap();
         let expect = vec![
-            InstructionV2::Split(1, 3),
+            Instruction::Split(1, 3),
             literal('a'),
-            InstructionV2::Jump(4),
+            Instruction::Jump(4),
             literal('b'),
-            InstructionV2::Match,
+            Instruction::Match,
         ];
         assert_eq!(actual, expect);
     }
 
     #[test]
-    fn test_compile_v2_star() {
+    fn test_compile_star() {
         let ast = parse("a*").unwrap();
-        let actual = compile_v2(&ast).unwrap();
+        let actual = compile(&ast).unwrap();
         let expect = vec![
-            InstructionV2::Split(1, 3),
+            Instruction::Split(1, 3),
             literal('a'),
-            InstructionV2::Jump(0),
-            InstructionV2::Match,
+            Instruction::Jump(0),
+            Instruction::Match,
         ];
         assert_eq!(actual, expect);
     }
 
     #[test]
-    fn test_compile_v2_repeat() {
+    fn test_compile_repeat() {
         let ast = parse("a{2,3}").unwrap();
-        let actual = compile_v2(&ast).unwrap();
+        let actual = compile(&ast).unwrap();
         let expect = vec![
             literal('a'),
             literal('a'),
-            InstructionV2::Split(3, 4),
+            Instruction::Split(3, 4),
             literal('a'),
-            InstructionV2::Match,
+            Instruction::Match,
         ];
         assert_eq!(actual, expect);
     }
 
     #[test]
-    fn test_compile_v2_assert_and_backref() {
+    fn test_compile_assert_and_backref() {
         let ast = parse("^(abc)\\1$").unwrap();
-        let actual = compile_v2(&ast).unwrap();
+        let actual = compile(&ast).unwrap();
         let expect = vec![
-            InstructionV2::Assert(Predicate::StartOfLine),
-            InstructionV2::SaveStart(1),
+            Instruction::Assert(Predicate::StartOfLine),
+            Instruction::SaveStart(1),
             literal('a'),
             literal('b'),
             literal('c'),
-            InstructionV2::SaveEnd(1),
-            InstructionV2::Backref(1),
-            InstructionV2::Assert(Predicate::EndOfLine),
-            InstructionV2::Match,
+            Instruction::SaveEnd(1),
+            Instruction::Backref(1),
+            Instruction::Assert(Predicate::EndOfLine),
+            Instruction::Match,
         ];
         assert_eq!(actual, expect);
     }
 
     #[test]
-    fn test_compile_v2_invalid_backreference() {
+    fn test_compile_invalid_backreference() {
         let ast = parse("(a)\\2").unwrap();
-        let actual = compile_v2(&ast);
-        assert_eq!(actual, Err(CompileV2Error::InvalidBackreference(2)));
+        let actual = compile(&ast);
+        assert_eq!(actual, Err(CompileError::InvalidBackreference(2)));
     }
 }

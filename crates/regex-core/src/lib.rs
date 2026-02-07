@@ -1,16 +1,13 @@
 use std::collections::BTreeSet;
 
-use engine::InstructionV2;
+use engine::Instruction;
 
 mod engine;
 pub mod error;
 
-pub type RegexV2 = Regex;
-pub type RegexV2Error = error::RegexError;
-
 /// パターンと文字列のマッチングを実行する API
 pub struct Regex {
-    code: Vec<InstructionV2>,
+    code: Vec<Instruction>,
     first_strings: BTreeSet<String>,
     is_ignore_case: bool,
     is_invert_match: bool,
@@ -67,7 +64,7 @@ impl Regex {
         Ok(false)
     }
 
-    fn get_first_strings(insts: &[InstructionV2]) -> BTreeSet<String> {
+    fn get_first_strings(insts: &[Instruction]) -> BTreeSet<String> {
         let mut first_strings: BTreeSet<String> = BTreeSet::new();
         match insts.first() {
             Some(inst) if Self::literal_from_instruction(inst).is_some() => {
@@ -75,7 +72,7 @@ impl Regex {
                     first_strings.insert(string);
                 }
             }
-            Some(InstructionV2::Split(left, right)) => {
+            Some(Instruction::Split(left, right)) => {
                 if let Some(string) = Self::get_string(insts, *left) {
                     first_strings.insert(string);
                 }
@@ -88,7 +85,7 @@ impl Regex {
         first_strings
     }
 
-    fn get_string(insts: &[InstructionV2], mut start: usize) -> Option<String> {
+    fn get_string(insts: &[Instruction], mut start: usize) -> Option<String> {
         let mut pre: String = String::new();
 
         while start < insts.len() {
@@ -108,8 +105,8 @@ impl Regex {
         if pre.is_empty() { None } else { Some(pre) }
     }
 
-    fn literal_from_instruction(inst: &InstructionV2) -> Option<char> {
-        let InstructionV2::CharClass(class) = inst else {
+    fn literal_from_instruction(inst: &Instruction) -> Option<char> {
+        let Instruction::CharClass(class) = inst else {
             return None;
         };
 

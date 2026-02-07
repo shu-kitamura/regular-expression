@@ -1,4 +1,4 @@
-//! v2 命令列を評価する。
+//! 命令列を評価する。
 #![allow(dead_code)]
 
 use std::collections::HashSet;
@@ -7,17 +7,17 @@ use thiserror::Error;
 
 use crate::engine::{
     ast::{CharClass, Predicate},
-    instruction_v2::InstructionV2,
+    instruction::Instruction,
     safe_add,
 };
 
 #[derive(Debug, Error, PartialEq, Eq)]
-pub enum EvalV2Error {
-    #[error("EvalV2Error: PCOverFlow")]
+pub enum EvalError {
+    #[error("EvalError: PCOverFlow")]
     PCOverFlow,
-    #[error("EvalV2Error: CharIndexOverFlow")]
+    #[error("EvalError: CharIndexOverFlow")]
     CharIndexOverFlow,
-    #[error("EvalV2Error: InvalidPC")]
+    #[error("EvalError: InvalidPC")]
     InvalidPC,
 }
 
@@ -59,12 +59,12 @@ impl StateKey {
     }
 }
 
-fn increment_pc(pc: &mut usize) -> Result<(), EvalV2Error> {
-    safe_add(pc, &1, || EvalV2Error::PCOverFlow)
+fn increment_pc(pc: &mut usize) -> Result<(), EvalError> {
+    safe_add(pc, &1, || EvalError::PCOverFlow)
 }
 
-fn increment_char_index(char_index: &mut usize, size: usize) -> Result<(), EvalV2Error> {
-    safe_add(char_index, &size, || EvalV2Error::CharIndexOverFlow)
+fn increment_char_index(char_index: &mut usize, size: usize) -> Result<(), EvalError> {
+    safe_add(char_index, &size, || EvalError::CharIndexOverFlow)
 }
 
 fn eval_char_class(class: &CharClass, current: Option<char>) -> bool {
@@ -119,7 +119,7 @@ fn is_word_char(c: char) -> bool {
     c.is_ascii_alphanumeric() || c == '_'
 }
 
-fn eval_backref(index: usize, state: &mut State, chars: &[char]) -> Result<bool, EvalV2Error> {
+fn eval_backref(index: usize, state: &mut State, chars: &[char]) -> Result<bool, EvalError> {
     let start = match state.capture_start.get(index).and_then(|value| *value) {
         Some(start) => start,
         None => return Ok(false),
@@ -149,13 +149,13 @@ fn eval_backref(index: usize, state: &mut State, chars: &[char]) -> Result<bool,
     Ok(true)
 }
 
-fn max_capture_index(inst: &[InstructionV2]) -> usize {
+fn max_capture_index(inst: &[Instruction]) -> usize {
     let mut max_index = 0;
     for instruction in inst {
         match instruction {
-            InstructionV2::SaveStart(index)
-            | InstructionV2::SaveEnd(index)
-            | InstructionV2::Backref(index) => {
+            Instruction::SaveStart(index)
+            | Instruction::SaveEnd(index)
+            | Instruction::Backref(index) => {
                 max_index = max_index.max(*index);
             }
             _ => {}
@@ -164,12 +164,12 @@ fn max_capture_index(inst: &[InstructionV2]) -> usize {
     max_index
 }
 
-fn eval_from_start_v2(
-    inst: &[InstructionV2],
+fn eval_from_start_inner(
+    inst: &[Instruction],
     chars: &[char],
     start: usize,
     capture_slots: usize,
-) -> Result<bool, EvalV2Error> {
+) -> Result<bool, EvalError> {
     let mut stack = vec![State::new(start, capture_slots)];
     let mut visited = HashSet::new();
 
@@ -182,24 +182,24 @@ fn eval_from_start_v2(
 
             let instruction = match inst.get(state.pc) {
                 Some(instruction) => instruction,
-                None => return Err(EvalV2Error::InvalidPC),
+                None => return Err(EvalError::InvalidPC),
             };
 
             match instruction {
-                InstructionV2::CharClass(class) => {
+                Instruction::CharClass(class) => {
                     if !eval_char_class(class, chars.get(state.char_index).copied()) {
                         break;
                     }
                     increment_pc(&mut state.pc)?;
                     increment_char_index(&mut state.char_index, 1)?;
                 }
-                InstructionV2::Assert(predicate) => {
+                Instruction::Assert(predicate) => {
                     if !eval_assert(*predicate, chars, state.char_index) {
                         break;
                     }
                     increment_pc(&mut state.pc)?;
                 }
-                InstructionV2::SaveStart(index) => {
+                Instruction::SaveStart(index) => {
                     if let Some(slot) = state.capture_start.get_mut(*index) {
                         *slot = Some(state.char_index);
                     } else {
@@ -207,7 +207,7 @@ fn eval_from_start_v2(
                     }
                     increment_pc(&mut state.pc)?;
                 }
-                InstructionV2::SaveEnd(index) => {
+                Instruction::SaveEnd(index) => {
                     if let Some(slot) = state.capture_end.get_mut(*index) {
                         *slot = Some(state.char_index);
                     } else {
@@ -215,19 +215,19 @@ fn eval_from_start_v2(
                     }
                     increment_pc(&mut state.pc)?;
                 }
-                InstructionV2::Backref(index) => {
+                Instruction::Backref(index) => {
                     if !eval_backref(*index, &mut state, chars)? {
                         break;
                     }
                 }
-                InstructionV2::Split(left, right) => {
+                Instruction::Split(left, right) => {
                     let mut right_state = state.clone();
                     right_state.pc = *right;
                     stack.push(right_state);
                     state.pc = *left;
                 }
-                InstructionV2::Jump(addr) => state.pc = *addr,
-                InstructionV2::Match => return Ok(true),
+                Instruction::Jump(addr) => state.pc = *addr,
+                Instruction::Match => return Ok(true),
             }
         }
     }
@@ -235,22 +235,22 @@ fn eval_from_start_v2(
     Ok(false)
 }
 
-pub fn eval_v2_from_start(inst: &[InstructionV2], input: &str) -> Result<bool, EvalV2Error> {
+pub fn eval_from_start(inst: &[Instruction], input: &str) -> Result<bool, EvalError> {
     let chars: Vec<char> = input.chars().collect();
     let capture_slots = max_capture_index(inst)
         .checked_add(1)
-        .ok_or(EvalV2Error::PCOverFlow)?;
-    eval_from_start_v2(inst, &chars, 0, capture_slots)
+        .ok_or(EvalError::PCOverFlow)?;
+    eval_from_start_inner(inst, &chars, 0, capture_slots)
 }
 
-pub fn eval_v2(inst: &[InstructionV2], input: &str) -> Result<bool, EvalV2Error> {
+pub fn eval(inst: &[Instruction], input: &str) -> Result<bool, EvalError> {
     let chars: Vec<char> = input.chars().collect();
     let capture_slots = max_capture_index(inst)
         .checked_add(1)
-        .ok_or(EvalV2Error::PCOverFlow)?;
+        .ok_or(EvalError::PCOverFlow)?;
 
     for start in 0..=chars.len() {
-        if eval_from_start_v2(inst, &chars, start, capture_slots)? {
+        if eval_from_start_inner(inst, &chars, start, capture_slots)? {
             return Ok(true);
         }
     }
@@ -262,82 +262,82 @@ pub fn eval_v2(inst: &[InstructionV2], input: &str) -> Result<bool, EvalV2Error>
 mod tests {
     use crate::engine::{
         ast::{CharClass, CharRange, Predicate},
-        compiler_v2::compile_v2,
-        evaluator_v2::{EvalV2Error, eval_v2, eval_v2_from_start},
-        instruction_v2::InstructionV2,
-        parser_v2::parse,
+        compiler::compile,
+        evaluator::{EvalError, eval, eval_from_start},
+        instruction::Instruction,
+        parser::parse,
     };
 
-    fn literal(c: char) -> InstructionV2 {
-        InstructionV2::CharClass(CharClass::new(vec![CharRange { start: c, end: c }], false))
+    fn literal(c: char) -> Instruction {
+        Instruction::CharClass(CharClass::new(vec![CharRange { start: c, end: c }], false))
     }
 
     #[test]
-    fn test_eval_v2_backreference_match_and_mismatch() {
+    fn test_eval_backreference_match_and_mismatch() {
         let ast = parse("(abc)\\1").unwrap();
-        let inst = compile_v2(&ast).unwrap();
+        let inst = compile(&ast).unwrap();
 
-        assert!(eval_v2(&inst, "abcabc").unwrap());
-        assert!(!eval_v2(&inst, "abcabd").unwrap());
+        assert!(eval(&inst, "abcabc").unwrap());
+        assert!(!eval(&inst, "abcabd").unwrap());
     }
 
     #[test]
-    fn test_eval_v2_unresolved_backreference() {
+    fn test_eval_unresolved_backreference() {
         let ast = parse("(a)?\\1").unwrap();
-        let inst = compile_v2(&ast).unwrap();
+        let inst = compile(&ast).unwrap();
 
-        assert!(!eval_v2(&inst, "a").unwrap());
-        assert!(!eval_v2(&inst, "").unwrap());
-        assert!(eval_v2(&inst, "aa").unwrap());
+        assert!(!eval(&inst, "a").unwrap());
+        assert!(!eval(&inst, "").unwrap());
+        assert!(eval(&inst, "aa").unwrap());
     }
 
     #[test]
-    fn test_eval_v2_negated_class() {
+    fn test_eval_negated_class() {
         let ast = parse("d[^io]g").unwrap();
-        let inst = compile_v2(&ast).unwrap();
+        let inst = compile(&ast).unwrap();
 
-        assert!(eval_v2(&inst, "dag").unwrap());
-        assert!(!eval_v2(&inst, "dig").unwrap());
-        assert!(!eval_v2(&inst, "dog").unwrap());
+        assert!(eval(&inst, "dag").unwrap());
+        assert!(!eval(&inst, "dig").unwrap());
+        assert!(!eval(&inst, "dog").unwrap());
     }
 
     #[test]
-    fn test_eval_v2_anchors() {
+    fn test_eval_anchors() {
         let ast = parse("^abc$").unwrap();
-        let inst = compile_v2(&ast).unwrap();
-        assert!(eval_v2(&inst, "abc").unwrap());
-        assert!(!eval_v2(&inst, "xabc").unwrap());
-        assert!(!eval_v2(&inst, "abcx").unwrap());
+        let inst = compile(&ast).unwrap();
+        assert!(eval(&inst, "abc").unwrap());
+        assert!(!eval(&inst, "xabc").unwrap());
+        assert!(!eval(&inst, "abcx").unwrap());
 
         let ast_empty = parse("^$").unwrap();
-        let inst_empty = compile_v2(&ast_empty).unwrap();
-        assert!(eval_v2(&inst_empty, "").unwrap());
-        assert!(!eval_v2(&inst_empty, "a").unwrap());
+        let inst_empty = compile(&ast_empty).unwrap();
+        assert!(eval(&inst_empty, "").unwrap());
+        assert!(!eval(&inst_empty, "a").unwrap());
     }
 
     #[test]
-    fn test_eval_v2_word_boundary_predicate() {
+    fn test_eval_word_boundary_predicate() {
         let inst = vec![
-            InstructionV2::Assert(Predicate::WordBoundary),
+            Instruction::Assert(Predicate::WordBoundary),
             literal('a'),
-            InstructionV2::Match,
+            Instruction::Match,
         ];
-        assert!(eval_v2(&inst, "a").unwrap());
-        assert!(!eval_v2(&inst, "_a").unwrap());
+        assert!(eval(&inst, "a").unwrap());
+        assert!(!eval(&inst, "_a").unwrap());
     }
 
     #[test]
-    fn test_eval_v2_invalid_pc() {
-        let inst = vec![InstructionV2::Jump(10)];
-        let actual = eval_v2(&inst, "abc");
-        assert_eq!(actual, Err(EvalV2Error::InvalidPC));
+    fn test_eval_invalid_pc() {
+        let inst = vec![Instruction::Jump(10)];
+        let actual = eval(&inst, "abc");
+        assert_eq!(actual, Err(EvalError::InvalidPC));
     }
 
     #[test]
-    fn test_eval_v2_from_start() {
+    fn test_eval_from_start() {
         let ast = parse("abc").unwrap();
-        let inst = compile_v2(&ast).unwrap();
-        assert!(eval_v2_from_start(&inst, "abcxxx").unwrap());
-        assert!(!eval_v2_from_start(&inst, "xabc").unwrap());
+        let inst = compile(&ast).unwrap();
+        assert!(eval_from_start(&inst, "abcxxx").unwrap());
+        assert!(!eval_from_start(&inst, "xabc").unwrap());
     }
 }
