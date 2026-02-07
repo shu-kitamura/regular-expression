@@ -5,7 +5,6 @@ edition.workspace = true
 
 [dependencies]
 thiserror = "1.0"
-<<<<<<< HEAD
 
 [dev-dependencies]
 criterion = "0.5"
@@ -13,5 +12,3 @@ criterion = "0.5"
 [[bench]]
 name = "regex_engine_bench"
 harness = false
-=======
->>>>>>> bd41ef71be90f57e8d41b743830453a83c8d44a7
