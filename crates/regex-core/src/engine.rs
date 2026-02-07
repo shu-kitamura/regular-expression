@@ -4,6 +4,7 @@ pub mod compiler;
 pub mod evaluator;
 pub mod instruction;
 pub mod parser;
+mod parser_v2;
 
 use std::collections::BTreeSet;
 
