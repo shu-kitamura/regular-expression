@@ -235,6 +235,14 @@ fn eval_from_start_v2(
     Ok(false)
 }
 
+pub fn eval_v2_from_start(inst: &[InstructionV2], input: &str) -> Result<bool, EvalV2Error> {
+    let chars: Vec<char> = input.chars().collect();
+    let capture_slots = max_capture_index(inst)
+        .checked_add(1)
+        .ok_or(EvalV2Error::PCOverFlow)?;
+    eval_from_start_v2(inst, &chars, 0, capture_slots)
+}
+
 pub fn eval_v2(inst: &[InstructionV2], input: &str) -> Result<bool, EvalV2Error> {
     let chars: Vec<char> = input.chars().collect();
     let capture_slots = max_capture_index(inst)
@@ -255,7 +263,7 @@ mod tests {
     use crate::engine::{
         ast::{CharClass, CharRange, Predicate},
         compiler_v2::compile_v2,
-        evaluator_v2::{EvalV2Error, eval_v2},
+        evaluator_v2::{EvalV2Error, eval_v2, eval_v2_from_start},
         instruction_v2::InstructionV2,
         parser_v2::parse,
     };
@@ -323,5 +331,13 @@ mod tests {
         let inst = vec![InstructionV2::Jump(10)];
         let actual = eval_v2(&inst, "abc");
         assert_eq!(actual, Err(EvalV2Error::InvalidPC));
+    }
+
+    #[test]
+    fn test_eval_v2_from_start() {
+        let ast = parse("abc").unwrap();
+        let inst = compile_v2(&ast).unwrap();
+        assert!(eval_v2_from_start(&inst, "abcxxx").unwrap());
+        assert!(!eval_v2_from_start(&inst, "xabc").unwrap());
     }
 }

@@ -18,7 +18,7 @@ use crate::{
         compiler::compile,
         compiler_v2::{CompileV2Error, compile_v2},
         evaluator::eval,
-        evaluator_v2::{EvalV2Error, eval_v2},
+        evaluator_v2::{EvalV2Error, eval_v2, eval_v2_from_start},
         instruction::Instruction,
         parser::{Ast, parse},
         parser_v2::{ParseError as ParseV2Error, parse as parse_v2},
@@ -151,6 +151,11 @@ pub fn match_line_v2(code: &[InstructionV2], line: &str) -> Result<bool, RegexV2
     Ok(eval_v2(code, line)?)
 }
 
+/// v2 命令列で文字列先頭からのマッチングを実行する。
+pub fn match_line_v2_from_start(code: &[InstructionV2], line: &str) -> Result<bool, RegexV2Error> {
+    Ok(eval_v2_from_start(code, line)?)
+}
+
 /// 文字列のマッチングを実行する。
 fn match_string(
     insts: &[Instruction],
@@ -180,7 +185,7 @@ mod tests {
             RegexV2Error, compile_pattern, compile_pattern_v2,
             compiler_v2::CompileV2Error,
             instruction::{Char, Instruction},
-            match_line, match_line_v2, match_string, safe_add,
+            match_line, match_line_v2, match_line_v2_from_start, match_string, safe_add,
         },
         error::{EvalError, RegexError},
     };
@@ -458,5 +463,12 @@ mod tests {
         let code = compile_pattern_v2("(abc)\\1").unwrap();
         assert!(match_line_v2(&code, "abcabc").unwrap());
         assert!(!match_line_v2(&code, "abcabd").unwrap());
+    }
+
+    #[test]
+    fn test_match_line_v2_from_start() {
+        let code = compile_pattern_v2("abc").unwrap();
+        assert!(match_line_v2_from_start(&code, "abcdef").unwrap());
+        assert!(!match_line_v2_from_start(&code, "zabc").unwrap());
     }
 }

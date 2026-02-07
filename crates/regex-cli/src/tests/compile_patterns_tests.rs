@@ -1,5 +1,5 @@
 use crate::compile_patterns;
-use regex_core::error::RegexError;
+use regex_core::RegexV2Error as RegexError;
 
 #[test]
 fn test_compile_valid_patterns() {
@@ -69,12 +69,12 @@ fn test_compile_invalid_pattern() {
     let result = compile_patterns(&patterns, false, false);
     assert!(result.is_err());
 
-    // エラーの種類を確認（ParseError::NoRightParen）
+    // エラーの種類を確認（ParseError::MissingParenthesis）
     if let Err(err) = result {
         match err {
             RegexError::Parse(e) => {
-                // エラーメッセージに "no right parenthesis" が含まれていることを確認
-                assert!(format!("{e}").contains("no right parenthesis"));
+                // エラーメッセージに "missing closing parenthesis" が含まれていることを確認
+                assert!(format!("{e}").contains("missing closing parenthesis"));
             }
             _ => panic!("Expected ParseError"),
         }
@@ -109,12 +109,12 @@ fn test_compile_multiple_invalid_patterns() {
     let result = compile_patterns(&patterns, false, false);
     assert!(result.is_err());
 
-    // 最初のエラー（*に関するエラー）が返されることを確認
+    // 最初のエラー（* に関するエラー）が返されることを確認
     if let Err(err) = result {
         match err {
             RegexError::Parse(e) => {
-                // エラーメッセージに "no previous expression" が含まれていることを確認
-                assert!(format!("{e}").contains("no previous expression"));
+                // エラーメッセージに "unexpected character" が含まれていることを確認
+                assert!(format!("{e}").contains("unexpected character"));
             }
             _ => panic!("Expected ParseError"),
         }
