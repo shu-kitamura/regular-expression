@@ -1,4 +1,5 @@
 //! マッチングを行う関数を定義
+mod ast;
 pub mod compiler;
 pub mod evaluator;
 pub mod instruction;
