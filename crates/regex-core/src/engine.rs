@@ -1,41 +1,31 @@
 //! マッチングを行う関数を定義
 mod ast;
-pub mod compiler;
 mod compiler_v2;
-pub mod evaluator;
 mod evaluator_v2;
-pub mod instruction;
 mod instruction_v2;
-pub mod parser;
 mod parser_v2;
-
-use std::collections::BTreeSet;
 
 use thiserror::Error;
 
-use crate::{
-    engine::{
-        compiler::compile,
-        compiler_v2::{CompileV2Error, compile_v2},
-        evaluator::eval,
-        evaluator_v2::{EvalV2Error, eval_v2, eval_v2_from_start},
-        instruction::Instruction,
-        parser::{Ast, parse},
-        parser_v2::{ParseError as ParseV2Error, parse as parse_v2},
-    },
-    error::RegexError,
+use crate::engine::{
+    compiler_v2::compile_v2,
+    evaluator_v2::{eval_v2, eval_v2_from_start},
+    parser_v2::parse,
 };
 
+pub use compiler_v2::CompileV2Error as CompileError;
+pub use evaluator_v2::EvalV2Error as EvalError;
 pub use instruction_v2::InstructionV2;
+pub use parser_v2::ParseError;
 
 #[derive(Debug, Error, PartialEq)]
-pub enum RegexV2Error {
+pub enum RegexError {
     #[error(transparent)]
-    Parse(#[from] ParseV2Error),
+    Parse(#[from] ParseError),
     #[error(transparent)]
-    Compile(#[from] CompileV2Error),
+    Compile(#[from] CompileError),
     #[error(transparent)]
-    Eval(#[from] EvalV2Error),
+    Eval(#[from] EvalError),
 }
 
 /// オーバーフロー対策のトレイトを定義
@@ -63,412 +53,57 @@ where
     }
 }
 
-/// パターンをパースして、コンパイルする
-pub fn compile_pattern(mut pattern: &str) -> Result<(Vec<Instruction>, bool, bool), RegexError> {
-    let is_caret = pattern.starts_with('^');
-    if let Some(striped) = pattern.strip_prefix("^") {
-        pattern = striped;
-    }
-
-    let is_dollar = pattern.ends_with('$');
-    if let Some(striped) = pattern.strip_suffix("$") {
-        pattern = striped;
-    }
-
-    // 空のパターン（例: "^$" が入力され、アンカーが除去された場合）を処理する。
-    // アンカーが存在する場合のみ、空のパターンを許可する。
-    // 空のパターンは空の文字列にマッチする必要があるため、Match 命令のみを含む命令列を返す。
-    // この Match 命令は、アンカー条件（行頭/行末）が満たされた場合に即座に成功する。
-    if pattern.is_empty() && (is_caret || is_dollar) {
-        return Ok((vec![Instruction::Match], is_caret, is_dollar));
-    }
-
-    // パターンから Ast を生成する。
-    let ast: Ast = parse(pattern)?;
-
-    // Ast から コード(Instructionの配列)を生成する。
-    let instructions: Vec<Instruction> = compile(&ast)?;
-
-    Ok((instructions, is_caret, is_dollar))
-}
-
 /// v2 パターンをパースしてコンパイルする。
-pub fn compile_pattern_v2(pattern: &str) -> Result<Vec<InstructionV2>, RegexV2Error> {
-    let ast = parse_v2(pattern)?;
+pub fn compile_pattern(pattern: &str) -> Result<Vec<InstructionV2>, RegexError> {
+    let ast = parse(pattern)?;
     let instructions = compile_v2(&ast)?;
     Ok(instructions)
 }
 
-/// パターンと文字列のマッチングを実行する
-pub fn match_line(
-    code: &[Instruction],
-    first_strings: &BTreeSet<String>,
-    line: &str,
-    is_caret: bool,
-    is_dollar: bool,
-) -> Result<bool, RegexError> {
-    let mut is_match: bool = false;
-
-    if is_caret {
-        return match_string(code, line, is_dollar);
-    }
-
-    // 先頭リテラルがある場合、最初の文字を取得する
-    if !first_strings.is_empty() {
-        let mut pos = 0;
-        while let Some(i) = find_index(&line[pos..], first_strings) {
-            let start = pos + i;
-
-            is_match = match_string(code, &line[start..], is_dollar)?;
-            if is_match {
-                break;
-            }
-            pos = start + 1;
-        }
-    } else {
-        // 先頭リテラル無し → 旧ループ
-        // ここに到達するのは、最初の命令が Char::Any の場合のみ
-        for i in 0..line.len() {
-            // abcdefg という文字列の場合、以下のように順にマッチングする。
-            //     ループ1 : abcdefg
-            //     ループ2 : bcdefg
-            //     ・・・
-            //     ループN : g
-            is_match = match_string(code, &line[i..], is_dollar)?;
-
-            // マッチングが成功した場合、ループを抜ける
-            if is_match {
-                break;
-            }
-        }
-    }
-
-    Ok(is_match)
-}
-
 /// v2 命令列と文字列のマッチングを実行する。
-pub fn match_line_v2(code: &[InstructionV2], line: &str) -> Result<bool, RegexV2Error> {
+pub fn match_line(code: &[InstructionV2], line: &str) -> Result<bool, RegexError> {
     Ok(eval_v2(code, line)?)
 }
 
 /// v2 命令列で文字列先頭からのマッチングを実行する。
-pub fn match_line_v2_from_start(code: &[InstructionV2], line: &str) -> Result<bool, RegexV2Error> {
+pub fn match_line_from_start(code: &[InstructionV2], line: &str) -> Result<bool, RegexError> {
     Ok(eval_v2_from_start(code, line)?)
 }
 
-/// 文字列のマッチングを実行する。
-fn match_string(
-    insts: &[Instruction],
-    string: &str,
-    is_end_dollar: bool,
-) -> Result<bool, RegexError> {
-    let match_result: bool = eval(insts, string, is_end_dollar)?;
-    Ok(match_result)
-}
-
-fn find_index(string: &str, string_set: &BTreeSet<String>) -> Option<usize> {
-    string_set
-        .iter()
-        .map(|s| string.find(s))
-        .filter(|opt| opt.is_some())
-        .min()?
-}
-
-// ----- テストコード -----
-
 #[cfg(test)]
 mod tests {
-    use std::collections::BTreeSet;
-
-    use crate::{
-        engine::{
-            RegexV2Error, compile_pattern, compile_pattern_v2,
-            compiler_v2::CompileV2Error,
-            instruction::{Char, Instruction},
-            match_line, match_line_v2, match_line_v2_from_start, match_string, safe_add,
-        },
-        error::{EvalError, RegexError},
+    use crate::engine::{
+        CompileError, RegexError, compile_pattern, instruction_v2::InstructionV2, match_line,
+        match_line_from_start,
     };
 
     #[test]
-    fn test_match_string_true() {
-        let insts: Vec<Instruction> = vec![
-            Instruction::Char(Char::Literal('a')),
-            Instruction::Char(Char::Literal('b')),
-            Instruction::Split(3, 5),
-            Instruction::Char(Char::Literal('c')),
-            Instruction::Jump(6),
-            Instruction::Char(Char::Literal('d')),
-            Instruction::Match,
-        ];
-
-        let actual: bool = match_string(&insts, "abcd", false).unwrap();
-        assert!(actual);
+    fn test_compile_pattern_literal() {
+        let code = compile_pattern("abc").unwrap();
+        assert_eq!(code.len(), 4);
+        assert!(matches!(code.last(), Some(InstructionV2::Match)));
     }
 
     #[test]
-    fn test_match_string_false() {
-        let insts: Vec<Instruction> = vec![
-            Instruction::Char(Char::Literal('a')),
-            Instruction::Char(Char::Literal('b')),
-            Instruction::Split(3, 5),
-            Instruction::Char(Char::Literal('c')),
-            Instruction::Jump(6),
-            Instruction::Char(Char::Literal('d')),
-            Instruction::Match,
-        ];
-        let actual: bool = match_string(&insts, "abx", false).unwrap();
-        assert!(!actual);
-    }
-
-    #[test]
-    fn test_match_string_empty() {
-        // パターン "a*" と空文字列のマッチングを行うテスト
-        let insts: Vec<Instruction> = vec![
-            Instruction::Split(1, 3),
-            Instruction::Char(Char::Literal('a')),
-            Instruction::Jump(0),
-            Instruction::Match,
-        ];
-        let actual: bool = match_string(&insts, "", false).unwrap();
-        assert!(actual);
-    }
-
-    #[test]
-    fn test_match_string_eval_error() {
-        let insts: Vec<Instruction> = vec![
-            Instruction::Char(Char::Literal('a')),
-            Instruction::Char(Char::Literal('b')),
-            Instruction::Split(100, 200),
-            Instruction::Char(Char::Literal('c')),
-            Instruction::Jump(6),
-            Instruction::Char(Char::Literal('d')),
-            Instruction::Match,
-        ];
-        let actual = match_string(&insts, "abc", false);
-        assert_eq!(actual, Err(RegexError::Eval(EvalError::InvalidPC)));
-    }
-
-    #[test]
-    fn test_safe_add_success() {
-        use crate::error::CompileError;
-        let mut u: usize = 1;
-        let _ = safe_add(&mut u, &1, || RegexError::Compile(CompileError::PCOverFlow));
-        assert_eq!(u, 2);
-    }
-
-    #[test]
-    fn test_safe_add_failure() {
-        use crate::error::CompileError;
-
-        let expect = RegexError::Compile(CompileError::PCOverFlow);
-        let mut u: usize = usize::MAX;
-        let actual: RegexError =
-            safe_add(&mut u, &1, || RegexError::Compile(CompileError::PCOverFlow)).unwrap_err();
-        assert_eq!(actual, expect);
-    }
-
-    #[test]
-    fn test_compile_pattern() {
-        // "ab(c|d)" というパターンをコンパイルするテスト
-        let expect = vec![
-            Instruction::Char(Char::Literal('a')),
-            Instruction::Char(Char::Literal('b')),
-            Instruction::Split(3, 5),
-            Instruction::Char(Char::Literal('c')),
-            Instruction::Jump(6),
-            Instruction::Char(Char::Literal('d')),
-            Instruction::Match,
-        ];
-
-        let (code, is_caret, is_dollar) = compile_pattern("ab(c|d)").unwrap();
-        assert_eq!(code, expect);
-        assert!(!is_caret);
-        assert!(!is_dollar);
-    }
-
-    #[test]
-    fn test_compile_pattern_caret() {
-        // "^a*" というパターンをコンパイルするテスト
-        let expect = vec![
-            Instruction::Split(1, 3),
-            Instruction::Char(Char::Literal('a')),
-            Instruction::Jump(0),
-            Instruction::Match,
-        ];
-
-        let (code, is_caret, is_dollar) = compile_pattern("^a*").unwrap();
-        assert_eq!(code, expect);
-        assert!(is_caret);
-        assert!(!is_dollar);
-    }
-
-    #[test]
-    fn test_compile_pattern_dollar() {
-        // "a?b$" というパターンをコンパイルするテスト
-        let expect = vec![
-            Instruction::Split(1, 2),
-            Instruction::Char(Char::Literal('a')),
-            Instruction::Char(Char::Literal('b')),
-            Instruction::Match,
-        ];
-
-        let (code, is_caret, is_dollar) = compile_pattern("a?b$").unwrap();
-        assert_eq!(code, expect);
-        assert!(!is_caret);
-        assert!(is_dollar);
-    }
-
-    #[test]
-    fn test_match_line() {
-        // "ab(c|d)" というパターンに対してのテスト
-        let insts: Vec<Instruction> = vec![
-            Instruction::Char(Char::Literal('a')),
-            Instruction::Char(Char::Literal('b')),
-            Instruction::Split(3, 5),
-            Instruction::Char(Char::Literal('c')),
-            Instruction::Jump(6),
-            Instruction::Char(Char::Literal('d')),
-            Instruction::Match,
-        ];
-        let first_strings: BTreeSet<String> = ["ab"].iter().map(|s| s.to_string()).collect();
-
-        // "abc" という文字列をマッチングするテスト
-        let actual1: bool = match_line(&insts, &first_strings, "abc", false, false).unwrap();
-        assert!(actual1);
-
-        // "abe" という文字列をマッチングするテスト
-        let actual2: bool = match_line(&insts, &first_strings, "abe", false, false).unwrap();
-        assert!(!actual2);
-
-        // "a?b" というパターンに対するテスト
-        // 命令列の 1 番目が Char 以外のテスト
-        let insts = vec![
-            Instruction::Split(1, 2),
-            Instruction::Char(Char::Literal('a')),
-            Instruction::Char(Char::Literal('b')),
-            Instruction::Match,
-        ];
-        let first_strings: BTreeSet<String> = ["ab", "b"].iter().map(|s| s.to_string()).collect();
-        let actual3 = match_line(&insts, &first_strings, "ab", false, false).unwrap();
-        assert!(actual3);
-
-        // ".abc" というパターンに対するテスト
-        let insts = vec![
-            Instruction::Char(Char::Any),
-            Instruction::Char(Char::Literal('a')),
-            Instruction::Char(Char::Literal('b')),
-            Instruction::Char(Char::Literal('c')),
-            Instruction::Match,
-        ];
-        let first_strings: BTreeSet<String> = BTreeSet::new();
-        let actual4 = match_line(&insts, &first_strings, "xxxabc", false, false).unwrap();
-        assert!(actual4);
-    }
-
-    #[test]
-    fn test_match_line_caret() {
-        // "^a+b" というパターンに対してのテスト
-        let insts: Vec<Instruction> = vec![
-            Instruction::Char(Char::Literal('a')),
-            Instruction::Split(0, 2),
-            Instruction::Char(Char::Literal('b')),
-            Instruction::Match,
-        ];
-        let first_strings: BTreeSet<String> = ["a"].iter().map(|s| s.to_string()).collect();
-
-        // "aab" という文字列をマッチングするテスト
-        let actual1: bool = match_line(&insts, &first_strings, "aab", true, false).unwrap();
-        assert!(actual1);
-
-        // "xabcd" という文字列をマッチングするテスト
-        let actual2: bool = match_line(&insts, &first_strings, "xabcd", true, false).unwrap();
-        assert!(!actual2);
-    }
-
-    #[test]
-    fn test_match_line_dollar() {
-        // "ab$" というパターンに対してのテスト
-        let insts: Vec<Instruction> = vec![
-            Instruction::Char(Char::Literal('a')),
-            Instruction::Char(Char::Literal('b')),
-            Instruction::Match,
-        ];
-        let first_strings: BTreeSet<String> = ["a"].iter().map(|s| s.to_string()).collect();
-        // "ab" という文字列をマッチングするテスト
-        let actual1: bool = match_line(&insts, &first_strings, "ab", false, true).unwrap();
-        assert!(actual1);
-
-        // "abc" という文字列をマッチングするテスト
-        let actual2: bool = match_line(&insts, &first_strings, "abc", false, true).unwrap();
-        assert!(!actual2);
-    }
-
-    #[test]
-    fn test_compile_pattern_empty_with_anchors() {
-        // "^$" というパターンをコンパイルするテスト（空行にマッチ）
-        // この機能は以前 ParseError::Empty を返していた問題を修正したもの
-        let expect = vec![Instruction::Match];
-
-        let (code, is_caret, is_dollar) = compile_pattern("^$").unwrap();
-        assert_eq!(code, expect);
-        assert!(is_caret);
-        assert!(is_dollar);
-
-        // "^" というパターンをコンパイルするテスト（行頭にマッチ）
-        let (code2, is_caret2, is_dollar2) = compile_pattern("^").unwrap();
-        assert_eq!(code2, vec![Instruction::Match]);
-        assert!(is_caret2);
-        assert!(!is_dollar2);
-
-        // "$" というパターンをコンパイルするテスト（行末にマッチ）
-        let (code3, is_caret3, is_dollar3) = compile_pattern("$").unwrap();
-        assert_eq!(code3, vec![Instruction::Match]);
-        assert!(!is_caret3);
-        assert!(is_dollar3);
-    }
-
-    #[test]
-    fn test_match_empty_line() {
-        // "^$" というパターンで空行をマッチングするテスト
-        let (code, is_caret, is_dollar) = compile_pattern("^$").unwrap();
-        let first_strings: BTreeSet<String> = BTreeSet::new();
-
-        // 空文字列とマッチするテスト
-        let actual1: bool = match_line(&code, &first_strings, "", is_caret, is_dollar).unwrap();
-        assert!(actual1);
-
-        // 非空文字列とマッチしないテスト
-        let actual2: bool = match_line(&code, &first_strings, "test", is_caret, is_dollar).unwrap();
-        assert!(!actual2);
-
-        // スペースを含む文字列とマッチしないテスト
-        let actual3: bool = match_line(&code, &first_strings, " ", is_caret, is_dollar).unwrap();
-        assert!(!actual3);
-    }
-
-    #[test]
-    fn test_compile_pattern_v2_invalid_backreference() {
-        let actual = compile_pattern_v2("(a)\\2");
+    fn test_compile_pattern_invalid_backreference() {
+        let actual = compile_pattern("(a)\\2");
         assert_eq!(
             actual,
-            Err(RegexV2Error::Compile(CompileV2Error::InvalidBackreference(
-                2
-            )))
+            Err(RegexError::Compile(CompileError::InvalidBackreference(2)))
         );
     }
 
     #[test]
-    fn test_match_line_v2_backreference() {
-        let code = compile_pattern_v2("(abc)\\1").unwrap();
-        assert!(match_line_v2(&code, "abcabc").unwrap());
-        assert!(!match_line_v2(&code, "abcabd").unwrap());
+    fn test_match_line_backreference() {
+        let code = compile_pattern("(abc)\\1").unwrap();
+        assert!(match_line(&code, "abcabc").unwrap());
+        assert!(!match_line(&code, "abcabd").unwrap());
     }
 
     #[test]
-    fn test_match_line_v2_from_start() {
-        let code = compile_pattern_v2("abc").unwrap();
-        assert!(match_line_v2_from_start(&code, "abcdef").unwrap());
-        assert!(!match_line_v2_from_start(&code, "zabc").unwrap());
+    fn test_match_line_from_start() {
+        let code = compile_pattern("abc").unwrap();
+        assert!(match_line_from_start(&code, "abcdef").unwrap());
+        assert!(!match_line_from_start(&code, "zabc").unwrap());
     }
 }

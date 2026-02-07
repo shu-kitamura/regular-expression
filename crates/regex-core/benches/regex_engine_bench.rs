@@ -1,20 +1,13 @@
 use criterion::{Criterion, black_box, criterion_group, criterion_main};
-use regex_core::{Regex, RegexV2};
+use regex_core::Regex;
 
 fn bench_compile(c: &mut Criterion) {
     let mut group = c.benchmark_group("compile");
     let pattern = "a(b|c|d)*xyz";
 
-    group.bench_function("regex_v1_compile", |b| {
+    group.bench_function("regex_compile", |b| {
         b.iter(|| {
             let compiled = Regex::new(black_box(pattern), false, false).unwrap();
-            black_box(compiled);
-        })
-    });
-
-    group.bench_function("regex_v2_compile", |b| {
-        b.iter(|| {
-            let compiled = RegexV2::new(black_box(pattern), false, false).unwrap();
             black_box(compiled);
         })
     });
@@ -27,33 +20,18 @@ fn bench_match(c: &mut Criterion) {
     let input_match = "zzzaacccdddbcdxyzend";
     let input_no_match = "zzzaacccdddbcdxyyend";
 
-    let regex_v1 = Regex::new("a(b|c|d)*xyz", false, false).unwrap();
-    let regex_v2 = RegexV2::new("a(b|c|d)*xyz", false, false).unwrap();
+    let regex = Regex::new("a(b|c|d)*xyz", false, false).unwrap();
 
-    group.bench_function("regex_v1_match_true", |b| {
+    group.bench_function("regex_match_true", |b| {
         b.iter(|| {
-            let matched = regex_v1.is_match(black_box(input_match)).unwrap();
+            let matched = regex.is_match(black_box(input_match)).unwrap();
             black_box(matched);
         })
     });
 
-    group.bench_function("regex_v1_match_false", |b| {
+    group.bench_function("regex_match_false", |b| {
         b.iter(|| {
-            let matched = regex_v1.is_match(black_box(input_no_match)).unwrap();
-            black_box(matched);
-        })
-    });
-
-    group.bench_function("regex_v2_match_true", |b| {
-        b.iter(|| {
-            let matched = regex_v2.is_match(black_box(input_match)).unwrap();
-            black_box(matched);
-        })
-    });
-
-    group.bench_function("regex_v2_match_false", |b| {
-        b.iter(|| {
-            let matched = regex_v2.is_match(black_box(input_no_match)).unwrap();
+            let matched = regex.is_match(black_box(input_no_match)).unwrap();
             black_box(matched);
         })
     });
@@ -62,19 +40,19 @@ fn bench_match(c: &mut Criterion) {
 }
 
 fn bench_backreference(c: &mut Criterion) {
-    let mut group = c.benchmark_group("backreference_v2");
-    let regex_v2 = RegexV2::new("(abc)\\1", false, false).unwrap();
+    let mut group = c.benchmark_group("backreference");
+    let regex = Regex::new("(abc)\\1", false, false).unwrap();
 
-    group.bench_function("regex_v2_backref_match_true", |b| {
+    group.bench_function("regex_backref_match_true", |b| {
         b.iter(|| {
-            let matched = regex_v2.is_match(black_box("abcabc")).unwrap();
+            let matched = regex.is_match(black_box("abcabc")).unwrap();
             black_box(matched);
         })
     });
 
-    group.bench_function("regex_v2_backref_match_false", |b| {
+    group.bench_function("regex_backref_match_false", |b| {
         b.iter(|| {
-            let matched = regex_v2.is_match(black_box("abcabd")).unwrap();
+            let matched = regex.is_match(black_box("abcabd")).unwrap();
             black_box(matched);
         })
     });

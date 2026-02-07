@@ -2,7 +2,7 @@ mod error;
 
 use crate::error::CommandLineError;
 use clap::{ArgAction, Parser};
-use regex_core::{RegexV2 as Regex, RegexV2Error as RegexError};
+use regex_core::{Regex, error::RegexError};
 use std::{
     fs::File,
     io::{BufRead, BufReader, Stdin, stdin},
@@ -271,7 +271,7 @@ mod tests {
     use std::{fs::File, io::BufReader};
 
     use crate::error::CommandLineError;
-    use regex_core::RegexV2 as Regex;
+    use regex_core::Regex;
 
     use crate::{is_print_filename, match_file};
 
