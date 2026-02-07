@@ -59,13 +59,6 @@ Current limitations:
 ## Examples
 
 ```sh
-# Example file
-$ cat test.txt
-hoge hoge
-HOGE HOGE
-fuga fuga
-FUGA FUGA
-
 # Search in a file
 regex "ho*" test.txt
 
