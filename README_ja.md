@@ -59,13 +59,6 @@ command | regex [OPTIONS] -e PATTERN [-e PATTERN ...]
 ## 使用例
 
 ```sh
-# 例として使うファイル
-$ cat test.txt
-hoge hoge
-HOGE HOGE
-fuga fuga
-FUGA FUGA
-
 # ファイルを検索
 regex "ho*" test.txt
 
