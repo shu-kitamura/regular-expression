@@ -1,22 +1,42 @@
 //! マッチングを行う関数を定義
 mod ast;
 pub mod compiler;
+mod compiler_v2;
 pub mod evaluator;
+mod evaluator_v2;
 pub mod instruction;
+mod instruction_v2;
 pub mod parser;
 mod parser_v2;
 
 use std::collections::BTreeSet;
 
+use thiserror::Error;
+
 use crate::{
     engine::{
         compiler::compile,
+        compiler_v2::{CompileV2Error, compile_v2},
         evaluator::eval,
+        evaluator_v2::{EvalV2Error, eval_v2},
         instruction::Instruction,
         parser::{Ast, parse},
+        parser_v2::{ParseError as ParseV2Error, parse as parse_v2},
     },
     error::RegexError,
 };
+
+pub use instruction_v2::InstructionV2;
+
+#[derive(Debug, Error, PartialEq)]
+pub enum RegexV2Error {
+    #[error(transparent)]
+    Parse(#[from] ParseV2Error),
+    #[error(transparent)]
+    Compile(#[from] CompileV2Error),
+    #[error(transparent)]
+    Eval(#[from] EvalV2Error),
+}
 
 /// オーバーフロー対策のトレイトを定義
 pub trait SafeAdd: Sized {
@@ -72,6 +92,13 @@ pub fn compile_pattern(mut pattern: &str) -> Result<(Vec<Instruction>, bool, boo
     Ok((instructions, is_caret, is_dollar))
 }
 
+/// v2 パターンをパースしてコンパイルする。
+pub fn compile_pattern_v2(pattern: &str) -> Result<Vec<InstructionV2>, RegexV2Error> {
+    let ast = parse_v2(pattern)?;
+    let instructions = compile_v2(&ast)?;
+    Ok(instructions)
+}
+
 /// パターンと文字列のマッチングを実行する
 pub fn match_line(
     code: &[Instruction],
@@ -119,6 +146,11 @@ pub fn match_line(
     Ok(is_match)
 }
 
+/// v2 命令列と文字列のマッチングを実行する。
+pub fn match_line_v2(code: &[InstructionV2], line: &str) -> Result<bool, RegexV2Error> {
+    Ok(eval_v2(code, line)?)
+}
+
 /// 文字列のマッチングを実行する。
 fn match_string(
     insts: &[Instruction],
@@ -145,9 +177,10 @@ mod tests {
 
     use crate::{
         engine::{
-            compile_pattern,
+            RegexV2Error, compile_pattern, compile_pattern_v2,
+            compiler_v2::CompileV2Error,
             instruction::{Char, Instruction},
-            match_line, match_string, safe_add,
+            match_line, match_line_v2, match_string, safe_add,
         },
         error::{EvalError, RegexError},
     };
@@ -407,5 +440,23 @@ mod tests {
         // スペースを含む文字列とマッチしないテスト
         let actual3: bool = match_line(&code, &first_strings, " ", is_caret, is_dollar).unwrap();
         assert!(!actual3);
+    }
+
+    #[test]
+    fn test_compile_pattern_v2_invalid_backreference() {
+        let actual = compile_pattern_v2("(a)\\2");
+        assert_eq!(
+            actual,
+            Err(RegexV2Error::Compile(CompileV2Error::InvalidBackreference(
+                2
+            )))
+        );
+    }
+
+    #[test]
+    fn test_match_line_v2_backreference() {
+        let code = compile_pattern_v2("(abc)\\1").unwrap();
+        assert!(match_line_v2(&code, "abcabc").unwrap());
+        assert!(!match_line_v2(&code, "abcabd").unwrap());
     }
 }

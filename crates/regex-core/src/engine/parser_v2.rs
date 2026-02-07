@@ -348,7 +348,7 @@ fn single_char_class(ch: char) -> Ast {
 
 #[cfg(test)]
 mod tests {
-    use super::{parse, single_char_class, ParseError, Parser};
+    use super::{ParseError, Parser, parse, single_char_class};
     use crate::engine::ast::{Ast, CharClass, CharRange, Predicate};
 
     #[test]

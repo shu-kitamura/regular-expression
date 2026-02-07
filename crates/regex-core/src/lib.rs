@@ -1,9 +1,13 @@
 use std::collections::BTreeSet;
 
-use engine::instruction::{Char, Instruction};
+use engine::{
+    InstructionV2,
+    instruction::{Char, Instruction},
+};
 
 mod engine;
 pub mod error;
+pub use engine::RegexV2Error;
 
 /// パターンと文字列のマッチングを実行するAPI
 ///
@@ -21,6 +25,13 @@ pub struct Regex {
     is_invert_match: bool,
     is_caret: bool,
     is_dollar: bool,
+}
+
+/// parser_v2 / compiler_v2 / evaluator_v2 を利用した API
+pub struct RegexV2 {
+    code: Vec<InstructionV2>,
+    is_ignore_case: bool,
+    is_invert_match: bool,
 }
 
 impl Regex {
@@ -128,6 +139,38 @@ impl Regex {
         }
 
         if pre.is_empty() { None } else { Some(pre) }
+    }
+}
+
+impl RegexV2 {
+    /// 新しい RegexV2 構造体を生成する
+    pub fn new(
+        pattern: &str,
+        is_ignore_case: bool,
+        is_invert_match: bool,
+    ) -> Result<Self, RegexV2Error> {
+        let code = if is_ignore_case {
+            engine::compile_pattern_v2(&pattern.to_lowercase())?
+        } else {
+            engine::compile_pattern_v2(pattern)?
+        };
+
+        Ok(Self {
+            code,
+            is_ignore_case,
+            is_invert_match,
+        })
+    }
+
+    /// 行とパターンのマッチングを実行する
+    pub fn is_match(&self, line: &str) -> Result<bool, RegexV2Error> {
+        let is_match = if self.is_ignore_case {
+            engine::match_line_v2(&self.code, &line.to_lowercase())?
+        } else {
+            engine::match_line_v2(&self.code, line)?
+        };
+
+        Ok(is_match ^ self.is_invert_match)
     }
 }
 
@@ -426,5 +469,25 @@ mod tests {
             vec![Instruction::Char(Char::Literal('x')), Instruction::Match];
         let result = Regex::get_string(&insts, 0);
         assert_eq!(result, Some("x".to_string()));
+    }
+
+    #[test]
+    fn test_regex_v2_is_match() {
+        let regex = RegexV2::new("ab(c|d)", false, false).unwrap();
+        assert!(regex.is_match("abc").unwrap());
+        assert!(!regex.is_match("abe").unwrap());
+    }
+
+    #[test]
+    fn test_regex_v2_backreference() {
+        let regex = RegexV2::new("(abc)\\1", false, false).unwrap();
+        assert!(regex.is_match("abcabc").unwrap());
+        assert!(!regex.is_match("abcabd").unwrap());
+    }
+
+    #[test]
+    fn test_regex_v2_invalid_backreference() {
+        let result = RegexV2::new("(a)\\2", false, false);
+        assert!(matches!(result, Err(RegexV2Error::Compile(_))));
     }
 }
