@@ -1,4 +1,4 @@
-//! マッチングを行う関数を定義
+//! Core functions for compiling and matching regex patterns.
 mod ast;
 mod compiler;
 mod evaluator;
@@ -18,28 +18,35 @@ pub use evaluator::EvalError;
 pub use instruction::Instruction;
 pub use parser::ParseError;
 
+/// Unified error type for parse, compile, and evaluation stages.
 #[derive(Debug, Error, PartialEq)]
 pub enum RegexError {
+    /// Parsing failed.
     #[error(transparent)]
     Parse(#[from] ParseError),
+    /// Compilation failed.
     #[error(transparent)]
     Compile(#[from] CompileError),
+    /// Runtime matching failed.
     #[error(transparent)]
     Eval(#[from] EvalError),
 }
 
-/// オーバーフロー対策のトレイトを定義
+/// Trait for checked addition used to avoid overflow.
 pub trait SafeAdd: Sized {
     fn safe_add(&self, n: &Self) -> Option<Self>;
 }
 
-/// SafeAdd トレイトを実装
+/// `SafeAdd` implementation for `usize`.
 impl SafeAdd for usize {
     fn safe_add(&self, n: &Self) -> Option<Self> {
         self.checked_add(*n)
     }
 }
 
+/// Adds `src` into `dst` using checked arithmetic.
+///
+/// Returns the error produced by `f` when the operation overflows.
 pub fn safe_add<T, F, E>(dst: &mut T, src: &T, f: F) -> Result<(), E>
 where
     T: SafeAdd,
@@ -53,19 +60,19 @@ where
     }
 }
 
-/// v2 パターンをパースしてコンパイルする。
+/// Parse and compile a pattern.
 pub fn compile_pattern(pattern: &str) -> Result<Vec<Instruction>, RegexError> {
     let ast = parse(pattern)?;
     let instructions = compile(&ast)?;
     Ok(instructions)
 }
 
-/// 命令列と文字列のマッチングを実行する。
+/// Match an instruction sequence against a line.
 pub fn match_line(code: &[Instruction], line: &str) -> Result<bool, RegexError> {
     Ok(eval(code, line)?)
 }
 
-/// 命令列で文字列先頭からのマッチングを実行する。
+/// Match an instruction sequence from the start of a line.
 pub fn match_line_from_start(code: &[Instruction], line: &str) -> Result<bool, RegexError> {
     Ok(eval_from_start(code, line)?)
 }

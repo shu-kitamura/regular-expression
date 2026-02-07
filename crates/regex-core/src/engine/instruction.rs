@@ -1,20 +1,28 @@
-//! compiler / evaluator で使用する命令セット。
+//! Instruction set used by the compiler and evaluator.
 #![allow(dead_code)]
 
 use std::fmt::{self, Display};
 
 use crate::engine::ast::{CharClass, Predicate};
 
-/// 使用する命令。
+/// Executable instructions.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Instruction {
+    /// Match a single character against a character class.
     CharClass(CharClass),
+    /// Evaluate a zero-width assertion.
     Assert(Predicate),
+    /// Store the start index of a capture group.
     SaveStart(usize),
+    /// Store the end index of a capture group.
     SaveEnd(usize),
+    /// Match the same text as a previously captured group.
     Backref(usize),
+    /// Branch execution into two instruction addresses.
     Split(usize, usize),
+    /// Unconditional jump.
     Jump(usize),
+    /// Successful match terminator.
     Match,
 }
 

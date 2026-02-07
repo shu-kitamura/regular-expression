@@ -1,4 +1,4 @@
-//! 命令列を評価する。
+//! Evaluate an instruction sequence.
 #![allow(dead_code)]
 
 use std::collections::HashSet;
@@ -11,16 +11,21 @@ use crate::engine::{
     safe_add,
 };
 
+/// Errors returned while evaluating instructions.
 #[derive(Debug, Error, PartialEq, Eq)]
 pub enum EvalError {
+    /// Program counter overflow.
     #[error("EvalError: PCOverFlow")]
     PCOverFlow,
+    /// Character index overflow.
     #[error("EvalError: CharIndexOverFlow")]
     CharIndexOverFlow,
+    /// Instruction pointer points outside the instruction array.
     #[error("EvalError: InvalidPC")]
     InvalidPC,
 }
 
+/// Runtime state for one NFA execution branch.
 #[derive(Debug, Clone)]
 struct State {
     pc: usize,
@@ -30,6 +35,7 @@ struct State {
 }
 
 impl State {
+    /// Creates a new state at `start` with preallocated capture slots.
     fn new(start: usize, capture_slots: usize) -> Self {
         Self {
             pc: 0,
@@ -40,6 +46,7 @@ impl State {
     }
 }
 
+/// Hashable state identity used to detect revisits and prevent infinite loops.
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 struct StateKey {
     pc: usize,
@@ -49,6 +56,7 @@ struct StateKey {
 }
 
 impl StateKey {
+    /// Builds a deduplication key from the current state.
     fn from_state(state: &State) -> Self {
         Self {
             pc: state.pc,
@@ -59,14 +67,17 @@ impl StateKey {
     }
 }
 
+/// Increments the program counter with overflow checks.
 fn increment_pc(pc: &mut usize) -> Result<(), EvalError> {
     safe_add(pc, &1, || EvalError::PCOverFlow)
 }
 
+/// Advances the current character index by `size` with overflow checks.
 fn increment_char_index(char_index: &mut usize, size: usize) -> Result<(), EvalError> {
     safe_add(char_index, &size, || EvalError::CharIndexOverFlow)
 }
 
+/// Evaluates one character-class instruction against the current character.
 fn eval_char_class(class: &CharClass, current: Option<char>) -> bool {
     let Some(current_char) = current else {
         return false;
@@ -84,6 +95,7 @@ fn eval_char_class(class: &CharClass, current: Option<char>) -> bool {
     }
 }
 
+/// Evaluates one zero-width assertion at the current position.
 fn eval_assert(predicate: Predicate, chars: &[char], char_index: usize) -> bool {
     if char_index > chars.len() {
         return false;
@@ -101,6 +113,7 @@ fn eval_assert(predicate: Predicate, chars: &[char], char_index: usize) -> bool 
     }
 }
 
+/// Returns whether the current boundary is between word and non-word characters.
 fn is_word_boundary(chars: &[char], char_index: usize) -> bool {
     let prev = if char_index == 0 {
         None
@@ -115,10 +128,12 @@ fn is_word_boundary(chars: &[char], char_index: usize) -> bool {
     is_prev_word != is_curr_word
 }
 
+/// Defines word characters for `WordBoundary`.
 fn is_word_char(c: char) -> bool {
     c.is_ascii_alphanumeric() || c == '_'
 }
 
+/// Evaluates a backreference by comparing against the captured slice.
 fn eval_backref(index: usize, state: &mut State, chars: &[char]) -> Result<bool, EvalError> {
     let start = match state.capture_start.get(index).and_then(|value| *value) {
         Some(start) => start,
@@ -149,6 +164,7 @@ fn eval_backref(index: usize, state: &mut State, chars: &[char]) -> Result<bool,
     Ok(true)
 }
 
+/// Returns the largest capture index referenced by instructions.
 fn max_capture_index(inst: &[Instruction]) -> usize {
     let mut max_index = 0;
     for instruction in inst {
@@ -164,6 +180,7 @@ fn max_capture_index(inst: &[Instruction]) -> usize {
     max_index
 }
 
+/// Runs the NFA from a fixed starting character index.
 fn eval_from_start_inner(
     inst: &[Instruction],
     chars: &[char],
@@ -235,6 +252,7 @@ fn eval_from_start_inner(
     Ok(false)
 }
 
+/// Evaluates whether `input` matches from the first character.
 pub fn eval_from_start(inst: &[Instruction], input: &str) -> Result<bool, EvalError> {
     let chars: Vec<char> = input.chars().collect();
     let capture_slots = max_capture_index(inst)
@@ -243,6 +261,7 @@ pub fn eval_from_start(inst: &[Instruction], input: &str) -> Result<bool, EvalEr
     eval_from_start_inner(inst, &chars, 0, capture_slots)
 }
 
+/// Evaluates whether `input` matches at any starting position.
 pub fn eval(inst: &[Instruction], input: &str) -> Result<bool, EvalError> {
     let chars: Vec<char> = input.chars().collect();
     let capture_slots = max_capture_index(inst)

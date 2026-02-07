@@ -5,16 +5,20 @@ use engine::Instruction;
 mod engine;
 pub mod error;
 
-/// パターンと文字列のマッチングを実行する API
+/// Public API for pattern matching.
 pub struct Regex {
+    /// Compiled instruction sequence.
     code: Vec<Instruction>,
+    /// Literal prefixes used for a fast pre-filter.
     first_strings: BTreeSet<String>,
+    /// Enables case-insensitive matching by lowercasing pattern/input.
     is_ignore_case: bool,
+    /// Inverts the final match result.
     is_invert_match: bool,
 }
 
 impl Regex {
-    /// 新しい Regex 構造体を生成する
+    /// Create a new `Regex`.
     pub fn new(
         pattern: &str,
         is_ignore_case: bool,
@@ -36,7 +40,7 @@ impl Regex {
         })
     }
 
-    /// 行とパターンのマッチングを実行する
+    /// Match a line against the compiled pattern.
     pub fn is_match(&self, line: &str) -> Result<bool, error::RegexError> {
         let is_match = if self.is_ignore_case {
             self.is_match_line(&line.to_lowercase())?
@@ -47,6 +51,7 @@ impl Regex {
         Ok(is_match ^ self.is_invert_match)
     }
 
+    /// Matches a line, optionally using a prefix pre-filter first.
     fn is_match_line(&self, line: &str) -> Result<bool, error::RegexError> {
         if self.first_strings.is_empty() {
             return engine::match_line(&self.code, line);
@@ -64,6 +69,7 @@ impl Regex {
         Ok(false)
     }
 
+    /// Extracts deterministic literal prefixes from the instruction stream.
     fn get_first_strings(insts: &[Instruction]) -> BTreeSet<String> {
         let mut first_strings: BTreeSet<String> = BTreeSet::new();
         match insts.first() {
@@ -85,6 +91,7 @@ impl Regex {
         first_strings
     }
 
+    /// Collects a run of literal characters starting at `start`.
     fn get_string(insts: &[Instruction], mut start: usize) -> Option<String> {
         let mut pre: String = String::new();
 
@@ -105,6 +112,7 @@ impl Regex {
         if pre.is_empty() { None } else { Some(pre) }
     }
 
+    /// Returns a literal character when the instruction is a single-char class.
     fn literal_from_instruction(inst: &Instruction) -> Option<char> {
         let Instruction::CharClass(class) = inst else {
             return None;
@@ -123,6 +131,7 @@ impl Regex {
     }
 }
 
+/// Returns the smallest found index among all candidate strings.
 fn find_index(string: &str, string_set: &BTreeSet<String>) -> Option<usize> {
     string_set
         .iter()

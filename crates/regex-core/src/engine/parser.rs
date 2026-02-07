@@ -1,7 +1,6 @@
-//! Regex parser based on the Moonbit implementation.
+//! Recursive-descent parser for regex patterns.
 //!
-//! This module is currently not wired into the engine. It provides
-//! a standalone parser that returns `Ast`.
+//! The parser converts a pattern string into an `Ast` used by the compiler.
 #![allow(dead_code)]
 
 use crate::engine::ast::{Ast, CharClass, CharRange, Predicate};
@@ -11,35 +10,50 @@ const SPECIAL_CHARS: [char; 14] = [
     '*', '+', '?', '|', '(', ')', '[', ']', '{', '}', '\\', '.', '^', '$',
 ];
 
+/// Errors that can occur while parsing a pattern string.
 #[derive(Debug, Error, PartialEq)]
 pub enum ParseError {
+    /// Input ended while the parser still expected more tokens.
     #[error("unexpected end of input")]
     UnexpectedEnd,
+    /// Encountered an unexpected character in the current context.
     #[error("unexpected character: {0}")]
     UnexpectedChar(char),
+    /// Invalid repetition operator syntax.
     #[error("invalid repeat operator")]
     InvalidRepeatOp,
+    /// Invalid numeric range in repetition syntax.
     #[error("invalid repeat size")]
     InvalidRepeatSize,
+    /// Missing closing `]` for a character class.
     #[error("missing closing bracket ']'")]
     MissingBracket,
+    /// Missing closing `)` for a group.
     #[error("missing closing parenthesis ')'")]
     MissingParenthesis,
+    /// Trailing `\` at the end of the pattern.
     #[error("trailing backslash")]
     TrailingBackslash,
+    /// Invalid character class (for example, reversed range).
     #[error("invalid character class")]
     InvalidCharClass,
+    /// Missing numeric argument in repetition syntax.
     #[error("missing repeat argument")]
     MissingRepeatArgument,
 }
 
+/// Internal parser state.
 #[derive(Debug, Clone)]
 struct Parser {
+    /// Pattern characters as a random-access array.
     input: Vec<char>,
+    /// Current cursor position in `input`.
     pos: usize,
+    /// Next capture-group index (1-based).
     captures: usize,
 }
 
+/// Parses `regex` and returns its AST representation.
 pub fn parse(regex: &str) -> Result<Ast, ParseError> {
     let mut parser = Parser::new(regex);
     let ast = parser.parse_expression()?;
@@ -50,6 +64,7 @@ pub fn parse(regex: &str) -> Result<Ast, ParseError> {
 }
 
 impl Parser {
+    /// Creates a parser from a pattern string.
     fn new(regex: &str) -> Self {
         Self {
             input: regex.chars().collect(),
@@ -58,6 +73,7 @@ impl Parser {
         }
     }
 
+    /// Parses alternation expressions: `seq ('|' seq)*`.
     fn parse_expression(&mut self) -> Result<Ast, ParseError> {
         let mut left = self.parse_sequence()?;
         while self.consume_if('|') {
@@ -67,6 +83,7 @@ impl Parser {
         Ok(left)
     }
 
+    /// Parses concatenated terms until `|`, `)`, or end-of-input.
     fn parse_sequence(&mut self) -> Result<Ast, ParseError> {
         let mut sequence = Vec::new();
         while let Some(ch) = self.peek() {
@@ -83,6 +100,7 @@ impl Parser {
         })
     }
 
+    /// Parses one factor followed by an optional quantifier.
     fn parse_term(&mut self) -> Result<Ast, ParseError> {
         let mut base = self.parse_factor()?;
         match self.peek() {
@@ -138,6 +156,8 @@ impl Parser {
         Ok(base)
     }
 
+    /// Parses a primary expression:
+    /// group, class, dot, assertion, escape, or literal.
     fn parse_factor(&mut self) -> Result<Ast, ParseError> {
         match self.peek() {
             Some('(') => {
@@ -194,6 +214,7 @@ impl Parser {
         }
     }
 
+    /// Parses a character class body after `[` has been consumed.
     fn parse_char_class(&mut self) -> Result<Ast, ParseError> {
         let negated = self.consume_if('^');
         let mut ranges: Vec<CharRange> = Vec::new();
@@ -237,6 +258,7 @@ impl Parser {
         Ok(Ast::CharClass(CharClass::new(ranges, negated)))
     }
 
+    /// Parses one atom inside a character class, including escaped chars.
     fn parse_class_atom(&mut self) -> Result<char, ParseError> {
         let ch = self.next().ok_or(ParseError::MissingBracket)?;
         if ch != '\\' {
@@ -246,6 +268,10 @@ impl Parser {
         Ok(esc)
     }
 
+    /// Parses an escape sequence.
+    ///
+    /// `\1`, `\2`, ... are parsed as backreferences.
+    /// Other escapes are treated as escaped literals.
     fn parse_escape(&mut self) -> Result<Ast, ParseError> {
         let ch = self.next().ok_or(ParseError::TrailingBackslash)?;
         let ast = match ch {
@@ -266,6 +292,7 @@ impl Parser {
         Ok(ast)
     }
 
+    /// Parses repetition arguments in `{m}`, `{m,}`, `{m,n}`.
     fn parse_repeat(&mut self) -> Result<(u32, Option<u32>), ParseError> {
         let min = self.parse_number()?;
         match self.peek() {
@@ -296,6 +323,7 @@ impl Parser {
         }
     }
 
+    /// Parses a decimal number used in repetition arguments.
     fn parse_number(&mut self) -> Result<u32, ParseError> {
         let mut value: u32 = 0;
         let mut has_digits = false;
@@ -315,20 +343,24 @@ impl Parser {
         }
     }
 
+    /// Returns whether `c` has special meaning in this grammar.
     fn is_special_char(c: char) -> bool {
         SPECIAL_CHARS.contains(&c)
     }
 
+    /// Returns the current character without consuming it.
     fn peek(&self) -> Option<char> {
         self.input.get(self.pos).copied()
     }
 
+    /// Consumes and returns the current character.
     fn next(&mut self) -> Option<char> {
         let ch = self.peek()?;
         self.pos += 1;
         Some(ch)
     }
 
+    /// Consumes `expected` if it is the current character.
     fn consume_if(&mut self, expected: char) -> bool {
         if self.peek() == Some(expected) {
             self.pos += 1;
@@ -339,6 +371,7 @@ impl Parser {
     }
 }
 
+/// Builds an `Ast::CharClass` representing exactly one literal character.
 fn single_char_class(ch: char) -> Ast {
     Ast::CharClass(CharClass::new(
         vec![CharRange { start: ch, end: ch }],
