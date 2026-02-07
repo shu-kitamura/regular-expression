@@ -1,105 +1,129 @@
 # regular-expression
 
-Rust製の正規表現コマンド。  
-パターンにマッチする行を表示する。  
+A regular-expression engine and grep-like CLI written in Rust.
 
-## 書式  
+This workspace contains:
+- `regex-core`: parser/compiler/evaluator library.
+- `regex-cli`: command-line tool (`regex`) built on top of `regex-core`.
 
-```text
-regex [OPTIONS] PATTERN [FILE]
-regex [OPTIONS] [-e PATTERN] [FILE]
-command | regex PATTERN
-command | regex [-e PATTERN]
-```
+## Installation
 
-## 説明
-
-regex は FILE で名前を指定されたファイル（もしくは標準入力）を検索し、PATTERN にマッチする部分を含む行を探す。  
-デフォルトの場合、マッチする部分を含む行を表示する。  
-
-### 対応している正規表現
-
-- \+
-- \*
-- ?
-- |
-- ()
-- .
-- ^(行頭)
-- $
-
-## オプション
-
-### プログラムについての一般情報
-
-* --help  
-コマンドのヘルプを表示する。
-* -V, --version  
-バージョンを表示する。
-
-### マッチング・出力の制御  
-
-* -e, --regexp PATTERN  
-パターンを指定する。このオプションを複数回指定することで、複数のパターンを指定することができる。
-* -v, --invert-match  
-マッチの意味を逆にして、マッチしない行を抜き出して表示する。
-* -i, --ignore-case  
-PATTERN と入力ファイルの双方で、アルファベットの大文字と小文字を区別しない。
-* -c, --count  
-マッチした行を出力せず、マッチした行数を出力する。(-v と併用した場合、マッチしなかった行数を出力する)
-* -h, --no-filename  
-出力する行の前にファイル名を付けない。検索ファイルが1つの場合、こちらがデフォルト。
-* -H, --with-filename  
-出力する行の前にファイル名を付ける。検索ファイルが2つ以上の場合、こちらがデフォルト。
-* -n, --line-number  
-入力ファイル内での行番号を表示する。
-
-## インストール
-
-以下の手順でインストールできる。  
-```shell
+```sh
 cargo install --git https://github.com/shu-kitamura/regular-expression.git -p regex-cli
 ```
 
-## 開発用コマンド
+## CLI Usage
 
-```shell
-cargo run -p regex-cli --bin regex -- "a*b" "aaab"
+```text
+regex [OPTIONS] PATTERN [FILE...]
+regex [OPTIONS] -e PATTERN [-e PATTERN ...] [FILE...]
+command | regex [OPTIONS] PATTERN
+command | regex [OPTIONS] -e PATTERN [-e PATTERN ...]
 ```
 
-## 使用例
+If no file is given, input is read from stdin.
 
-```shell
-$ cat test.txt # 使用するファイル
+## Options
+
+- `-e, --regexp <PATTERN>`: Add a pattern. Can be specified multiple times.
+- `-c, --count`: Print only the number of matching lines.
+- `-i, --ignore-case`: Case-insensitive matching.
+- `-v, --invert-match`: Select non-matching lines.
+- `-h, --no-filename`: Never print file names in output.
+- `-H, --with-filename`: Always print file names in output.
+- `-n, --line-number`: Prefix each output line with its line number.
+- `--help`: Show help.
+- `-V, --version`: Show version.
+
+Notes:
+- `-h` and `-H` cannot be used together.
+- With multiple input files, file names are shown by default.
+- With one input file (or stdin), file names are hidden by default.
+
+## Supported Regex Syntax
+
+- Literals (e.g. `abc`)
+- Escaped literals (e.g. `\*`, `\+`, `\\`)
+- Wildcard: `.`
+- Character classes: `[abc]`, ranges `[a-z]`, negated classes `[^0-9]`
+- Quantifiers: `*`, `+`, `?`, `{m}`, `{m,}`, `{m,n}`
+- Grouping and alternation: `(ab|cd)`
+- Captures and backreferences: `(abc)\1`
+- Anchors: `^` and `$`
+
+Current limitations:
+- Non-greedy quantifiers (`*?`, `+?`, `??`, `{m,n}?`) are not supported.
+- Non-capturing groups (`(?:...)`) are not supported.
+- Escape sequences like `\d` and `\w` are treated as literal characters (`d`, `w`), not special classes.
+
+## Examples
+
+```sh
+# Example file
+$ cat test.txt
 hoge hoge
 HOGE HOGE
 fuga fuga
 FUGA FUGA
 
-$ regex ho* test.txt # オプション無し
-hoge hoge
+# Search in a file
+regex "ho*" test.txt
 
-$ regex -i ho* test.txt # 大文字と小文字を区別しない(-iオプション)
-hoge hoge
-HOGE HOGE
+# Case-insensitive search
+regex -i "ho*" test.txt
 
-$ regex -ci ho* test.txt # マッチした行数を表示(-cオプション)
-2
+# Count matches
+regex -c "ho*" test.txt
 
-$ regex -iv ho* test.txt # マッチしなかった行を表示(-vオプション)
-fuga fuga
-FUGA FUGA
+# Invert matches
+regex -v "ho*" test.txt
 
-$ regex -e ho* -e fu* test.txt # 複数のパターンを指定(-eオプション)
-hoge hoge
-fuga fuga
+# Multiple patterns (OR)
+regex -e "ho*" -e "fu*" test.txt
 
-$ cat test.txt | regex -e ho* -e fu # パイプを使用し、前のコマンドの出力を検索
-hoge hoge
-fuga fuga
+# Read from stdin
+cat test.txt | regex -e "ho*" -e "fu*"
+
+# Use captures + backreference
+regex "(abc)\\1" test.txt
 ```
 
-# ライセンス
+## Library Usage (`regex-core`)
 
-このプロジェクトは MIT ライセンスの下でライセンスされている。  
-詳細については LICENCE.txt を参照してください。
+```rust
+use regex_core::Regex;
+
+fn main() -> Result<(), regex_core::error::RegexError> {
+    let re = Regex::new("(abc)\\1", false, false)?;
+    assert!(re.is_match("abcabc")?);
+    assert!(!re.is_match("abcabd")?);
+    Ok(())
+}
+```
+
+## Development Commands
+
+```sh
+# Build
+cargo build
+
+# Run CLI
+cargo run -p regex-cli --bin regex -- "a*b" sample.txt
+
+# Test
+cargo test
+
+# Lint
+cargo clippy --workspace -- -D warnings
+
+# Format
+cargo fmt --all
+
+# Benchmark (criterion)
+cargo bench -p regex-core
+```
+
+## License
+
+This project is licensed under the MIT License.  
+See `LICENCE.txt` for details.

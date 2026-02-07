@@ -1,263 +1,362 @@
-//! Instruction と char配列を受け取って評価する
+//! Evaluate an instruction sequence.
+#![allow(dead_code)]
 
 use std::collections::HashSet;
 
-use crate::{
-    engine::{
-        instruction::{Char, Instruction},
-        safe_add,
-    },
-    error::EvalError,
+use thiserror::Error;
+
+use crate::engine::{
+    ast::{CharClass, Predicate},
+    instruction::Instruction,
+    safe_add,
 };
 
-/// char と Instruction を評価する
-fn eval_char(inst: &Char, string: &str, index: usize) -> bool {
-    let inst_char = match inst {
-        Char::Literal(c) => *c,
-        Char::Any => return true,
-    };
-
-    string.chars().nth(index) == Some(inst_char)
+/// Errors returned while evaluating instructions.
+#[derive(Debug, Error, PartialEq, Eq)]
+pub enum EvalError {
+    /// Program counter overflow.
+    #[error("EvalError: PCOverFlow")]
+    PCOverFlow,
+    /// Character index overflow.
+    #[error("EvalError: CharIndexOverFlow")]
+    CharIndexOverFlow,
+    /// Instruction pointer points outside the instruction array.
+    #[error("EvalError: InvalidPC")]
+    InvalidPC,
 }
 
-/// プログラムカウンタとchar配列のインデックスをインクリメントする
-fn increment_pc_and_index(pc: &mut usize, index: &mut usize) -> Result<(), EvalError> {
-    safe_add(pc, &1, || EvalError::PCOverFlow)?;
-    safe_add(index, &1, || EvalError::CharIndexOverFlow)
+/// Runtime state for one NFA execution branch.
+#[derive(Debug, Clone)]
+struct State {
+    pc: usize,
+    char_index: usize,
+    capture_start: Vec<Option<usize>>,
+    capture_end: Vec<Option<usize>>,
 }
 
-/// 深さ優先探索で再帰的にマッチングを行う関数
-fn eval_depth(
-    instructions: &[Instruction],
-    string: &str,
-    mut p_counter: usize,
-    mut char_index: usize,
-    is_end_dollar: bool,
-    visited: &mut HashSet<(usize, usize)>,
-) -> Result<bool, EvalError> {
-    loop {
-        // Instruction を取得
-        let instruction: &Instruction = match instructions.get(p_counter) {
-            Some(inst) => inst,
-            None => return Err(EvalError::InvalidPC),
-        };
-
-        // Instruction の型に応じて、評価を実行。
-        match instruction {
-            Instruction::Char(inst_char) => {
-                if eval_char(inst_char, string, char_index) {
-                    increment_pc_and_index(&mut p_counter, &mut char_index)?;
-                } else {
-                    return Ok(false);
-                };
-            }
-            Instruction::Match => {
-                if is_end_dollar {
-                    return Ok(string.len() == char_index);
-                } else {
-                    return Ok(true);
-                }
-            }
-            Instruction::Jump(addr) => p_counter = *addr,
-            Instruction::Split(addr1, addr2) => {
-                // すでに訪れた状態の場合、無限ループを避けるために false を返す
-                if !visited.insert((*addr1, char_index)) {
-                    return Ok(false);
-                }
-
-                // 1つ目の Split を評価する
-                if eval_depth(
-                    instructions,
-                    string,
-                    *addr1,
-                    char_index,
-                    is_end_dollar,
-                    visited,
-                )? {
-                    return Ok(true);
-                }
-
-                // 1つ目の Split が失敗した場合、2つ目の Split を評価する
-                return eval_depth(
-                    instructions,
-                    string,
-                    *addr2,
-                    char_index,
-                    is_end_dollar,
-                    visited,
-                );
-            }
+impl State {
+    /// Creates a new state at `start` with preallocated capture slots.
+    fn new(start: usize, capture_slots: usize) -> Self {
+        Self {
+            pc: 0,
+            char_index: start,
+            capture_start: vec![None; capture_slots],
+            capture_end: vec![None; capture_slots],
         }
     }
 }
 
-/// 命令列の評価を行う関数
-pub fn eval(inst: &[Instruction], string: &str, is_end_dollar: bool) -> Result<bool, EvalError> {
-    let mut visited = HashSet::new();
-    eval_depth(inst, string, 0, 0, is_end_dollar, &mut visited)
+/// Hashable state identity used to detect revisits and prevent infinite loops.
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+struct StateKey {
+    pc: usize,
+    char_index: usize,
+    capture_start: Vec<Option<usize>>,
+    capture_end: Vec<Option<usize>>,
 }
 
-// ----- テストコード -----
+impl StateKey {
+    /// Builds a deduplication key from the current state.
+    fn from_state(state: &State) -> Self {
+        Self {
+            pc: state.pc,
+            char_index: state.char_index,
+            capture_start: state.capture_start.clone(),
+            capture_end: state.capture_end.clone(),
+        }
+    }
+}
+
+/// Increments the program counter with overflow checks.
+fn increment_pc(pc: &mut usize) -> Result<(), EvalError> {
+    safe_add(pc, &1, || EvalError::PCOverFlow)
+}
+
+/// Advances the current character index by `size` with overflow checks.
+fn increment_char_index(char_index: &mut usize, size: usize) -> Result<(), EvalError> {
+    safe_add(char_index, &size, || EvalError::CharIndexOverFlow)
+}
+
+/// Evaluates one character-class instruction against the current character.
+fn eval_char_class(class: &CharClass, current: Option<char>) -> bool {
+    let Some(current_char) = current else {
+        return false;
+    };
+
+    let is_in_range = class
+        .ranges
+        .iter()
+        .any(|range| range.start <= current_char && current_char <= range.end);
+
+    if class.negated {
+        !is_in_range
+    } else {
+        is_in_range
+    }
+}
+
+/// Evaluates one zero-width assertion at the current position.
+fn eval_assert(predicate: Predicate, chars: &[char], char_index: usize) -> bool {
+    if char_index > chars.len() {
+        return false;
+    }
+
+    match predicate {
+        Predicate::StartOfLine => {
+            char_index == 0 || chars.get(char_index.saturating_sub(1)) == Some(&'\n')
+        }
+        Predicate::EndOfLine => char_index == chars.len() || chars.get(char_index) == Some(&'\n'),
+        Predicate::StartOfText => char_index == 0,
+        Predicate::EndOfText => char_index == chars.len(),
+        Predicate::WordBoundary => is_word_boundary(chars, char_index),
+        Predicate::NonWordBoundary => !is_word_boundary(chars, char_index),
+    }
+}
+
+/// Returns whether the current boundary is between word and non-word characters.
+fn is_word_boundary(chars: &[char], char_index: usize) -> bool {
+    let prev = if char_index == 0 {
+        None
+    } else {
+        chars.get(char_index - 1).copied()
+    };
+    let curr = chars.get(char_index).copied();
+
+    let is_prev_word = prev.map(is_word_char).unwrap_or(false);
+    let is_curr_word = curr.map(is_word_char).unwrap_or(false);
+
+    is_prev_word != is_curr_word
+}
+
+/// Defines word characters for `WordBoundary`.
+fn is_word_char(c: char) -> bool {
+    c.is_ascii_alphanumeric() || c == '_'
+}
+
+/// Evaluates a backreference by comparing against the captured slice.
+fn eval_backref(index: usize, state: &mut State, chars: &[char]) -> Result<bool, EvalError> {
+    let start = match state.capture_start.get(index).and_then(|value| *value) {
+        Some(start) => start,
+        None => return Ok(false),
+    };
+    let end = match state.capture_end.get(index).and_then(|value| *value) {
+        Some(end) => end,
+        None => return Ok(false),
+    };
+
+    if end < start || end > chars.len() || state.char_index > chars.len() {
+        return Ok(false);
+    }
+
+    let capture_len = end - start;
+    if chars.len() - state.char_index < capture_len {
+        return Ok(false);
+    }
+
+    for i in 0..capture_len {
+        if chars[start + i] != chars[state.char_index + i] {
+            return Ok(false);
+        }
+    }
+
+    increment_pc(&mut state.pc)?;
+    increment_char_index(&mut state.char_index, capture_len)?;
+    Ok(true)
+}
+
+/// Returns the largest capture index referenced by instructions.
+fn max_capture_index(inst: &[Instruction]) -> usize {
+    let mut max_index = 0;
+    for instruction in inst {
+        match instruction {
+            Instruction::SaveStart(index)
+            | Instruction::SaveEnd(index)
+            | Instruction::Backref(index) => {
+                max_index = max_index.max(*index);
+            }
+            _ => {}
+        }
+    }
+    max_index
+}
+
+/// Runs the NFA from a fixed starting character index.
+fn eval_from_start_inner(
+    inst: &[Instruction],
+    chars: &[char],
+    start: usize,
+    capture_slots: usize,
+) -> Result<bool, EvalError> {
+    let mut stack = vec![State::new(start, capture_slots)];
+    let mut visited = HashSet::new();
+
+    while let Some(mut state) = stack.pop() {
+        loop {
+            let key = StateKey::from_state(&state);
+            if !visited.insert(key) {
+                break;
+            }
+
+            let instruction = match inst.get(state.pc) {
+                Some(instruction) => instruction,
+                None => return Err(EvalError::InvalidPC),
+            };
+
+            match instruction {
+                Instruction::CharClass(class) => {
+                    if !eval_char_class(class, chars.get(state.char_index).copied()) {
+                        break;
+                    }
+                    increment_pc(&mut state.pc)?;
+                    increment_char_index(&mut state.char_index, 1)?;
+                }
+                Instruction::Assert(predicate) => {
+                    if !eval_assert(*predicate, chars, state.char_index) {
+                        break;
+                    }
+                    increment_pc(&mut state.pc)?;
+                }
+                Instruction::SaveStart(index) => {
+                    if let Some(slot) = state.capture_start.get_mut(*index) {
+                        *slot = Some(state.char_index);
+                    } else {
+                        break;
+                    }
+                    increment_pc(&mut state.pc)?;
+                }
+                Instruction::SaveEnd(index) => {
+                    if let Some(slot) = state.capture_end.get_mut(*index) {
+                        *slot = Some(state.char_index);
+                    } else {
+                        break;
+                    }
+                    increment_pc(&mut state.pc)?;
+                }
+                Instruction::Backref(index) => {
+                    if !eval_backref(*index, &mut state, chars)? {
+                        break;
+                    }
+                }
+                Instruction::Split(left, right) => {
+                    let mut right_state = state.clone();
+                    right_state.pc = *right;
+                    stack.push(right_state);
+                    state.pc = *left;
+                }
+                Instruction::Jump(addr) => state.pc = *addr,
+                Instruction::Match => return Ok(true),
+            }
+        }
+    }
+
+    Ok(false)
+}
+
+/// Evaluates whether `input` matches from the first character.
+pub fn eval_from_start(inst: &[Instruction], input: &str) -> Result<bool, EvalError> {
+    let chars: Vec<char> = input.chars().collect();
+    let capture_slots = max_capture_index(inst)
+        .checked_add(1)
+        .ok_or(EvalError::PCOverFlow)?;
+    eval_from_start_inner(inst, &chars, 0, capture_slots)
+}
+
+/// Evaluates whether `input` matches at any starting position.
+pub fn eval(inst: &[Instruction], input: &str) -> Result<bool, EvalError> {
+    let chars: Vec<char> = input.chars().collect();
+    let capture_slots = max_capture_index(inst)
+        .checked_add(1)
+        .ok_or(EvalError::PCOverFlow)?;
+
+    for start in 0..=chars.len() {
+        if eval_from_start_inner(inst, &chars, start, capture_slots)? {
+            return Ok(true);
+        }
+    }
+
+    Ok(false)
+}
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashSet;
-
-    use crate::{
-        engine::{
-            evaluator::{eval_char, eval_depth, increment_pc_and_index},
-            instruction::{Char, Instruction},
-        },
-        error::EvalError,
+    use crate::engine::{
+        ast::{CharClass, CharRange, Predicate},
+        compiler::compile,
+        evaluator::{EvalError, eval, eval_from_start},
+        instruction::Instruction,
+        parser::parse,
     };
 
-    #[test]
-    fn test_eval_char_true() {
-        let actual: bool = eval_char(&Char::Literal('a'), "abc", 0);
-        assert!(actual);
+    fn literal(c: char) -> Instruction {
+        Instruction::CharClass(CharClass::new(vec![CharRange { start: c, end: c }], false))
     }
 
     #[test]
-    fn test_eval_char_false() {
-        let actual1: bool = eval_char(&Char::Literal('a'), "abc", 1);
-        assert!(!actual1);
+    fn test_eval_backreference_match_and_mismatch() {
+        let ast = parse("(abc)\\1").unwrap();
+        let inst = compile(&ast).unwrap();
 
-        let actual2: bool = eval_char(&Char::Literal('a'), "abc", 10);
-        assert!(!actual2);
+        assert!(eval(&inst, "abcabc").unwrap());
+        assert!(!eval(&inst, "abcabd").unwrap());
     }
 
     #[test]
-    fn test_eval_char_any() {
-        let actual: bool = eval_char(&Char::Any, "abc", 0);
-        assert!(actual);
+    fn test_eval_unresolved_backreference() {
+        let ast = parse("(a)?\\1").unwrap();
+        let inst = compile(&ast).unwrap();
+
+        assert!(!eval(&inst, "a").unwrap());
+        assert!(!eval(&inst, "").unwrap());
+        assert!(eval(&inst, "aa").unwrap());
     }
 
     #[test]
-    fn test_increment_success() {
-        let pc: &mut usize = &mut 10;
-        let index: &mut usize = &mut 10;
-        let _ = increment_pc_and_index(pc, index);
+    fn test_eval_negated_class() {
+        let ast = parse("d[^io]g").unwrap();
+        let inst = compile(&ast).unwrap();
 
-        assert_eq!(pc, &mut 11);
-        assert_eq!(index, &mut 11);
+        assert!(eval(&inst, "dag").unwrap());
+        assert!(!eval(&inst, "dig").unwrap());
+        assert!(!eval(&inst, "dog").unwrap());
     }
 
     #[test]
-    fn test_increment_pc_overflow() {
-        let mut u = usize::MAX;
-        let actual = increment_pc_and_index(&mut u, &mut 1);
-        assert_eq!(actual, Err(EvalError::PCOverFlow));
+    fn test_eval_anchors() {
+        let ast = parse("^abc$").unwrap();
+        let inst = compile(&ast).unwrap();
+        assert!(eval(&inst, "abc").unwrap());
+        assert!(!eval(&inst, "xabc").unwrap());
+        assert!(!eval(&inst, "abcx").unwrap());
+
+        let ast_empty = parse("^$").unwrap();
+        let inst_empty = compile(&ast_empty).unwrap();
+        assert!(eval(&inst_empty, "").unwrap());
+        assert!(!eval(&inst_empty, "a").unwrap());
     }
 
     #[test]
-    fn test_increment_charindex_overflow() {
-        let mut u = usize::MAX;
-        let actual = increment_pc_and_index(&mut 1, &mut u);
-        assert_eq!(actual, Err(EvalError::CharIndexOverFlow));
-    }
-
-    #[test]
-    fn test_eval_depth_true() {
-        // "ab(c|d)" が入力された Instruction
-        let insts: Vec<Instruction> = vec![
-            Instruction::Char(Char::Literal('a')),
-            Instruction::Char(Char::Literal('b')),
-            Instruction::Split(3, 5),
-            Instruction::Char(Char::Literal('c')),
-            Instruction::Jump(6),
-            Instruction::Char(Char::Literal('d')),
+    fn test_eval_word_boundary_predicate() {
+        let inst = vec![
+            Instruction::Assert(Predicate::WordBoundary),
+            literal('a'),
             Instruction::Match,
         ];
-
-        // "abc" とマッチするケース
-        let mut visited1: HashSet<(usize, usize)> = HashSet::new();
-        let actual1 = eval_depth(&insts, "abc", 0, 0, false, &mut visited1).unwrap();
-        assert!(actual1);
-
-        // "abd"とマッチするケース
-        let mut visited2: HashSet<(usize, usize)> = HashSet::new();
-        let actual2 = eval_depth(&insts, "abc", 0, 0, false, &mut visited2).unwrap();
-        assert!(actual2);
+        assert!(eval(&inst, "a").unwrap());
+        assert!(!eval(&inst, "_a").unwrap());
     }
 
     #[test]
-    fn test_eval_depth_false() {
-        // "ab(c|d)" が入力された Instruction
-        let insts: Vec<Instruction> = vec![
-            Instruction::Char(Char::Literal('a')),
-            Instruction::Char(Char::Literal('b')),
-            Instruction::Split(3, 5),
-            Instruction::Char(Char::Literal('c')),
-            Instruction::Jump(6),
-            Instruction::Char(Char::Literal('d')),
-            Instruction::Match,
-        ];
-
-        // "abx" とマッチするケース
-        let mut visited: HashSet<(usize, usize)> = HashSet::new();
-        let actual = eval_depth(&insts, "abX", 0, 0, false, &mut visited).unwrap();
-        assert!(!actual);
-    }
-
-    #[test]
-    fn test_eval_depth_is_end_dollar() {
-        // "ab(c|d)" が入力された Instruction
-        let insts: Vec<Instruction> = vec![
-            Instruction::Char(Char::Literal('a')),
-            Instruction::Char(Char::Literal('b')),
-            Instruction::Split(3, 5),
-            Instruction::Char(Char::Literal('c')),
-            Instruction::Jump(6),
-            Instruction::Char(Char::Literal('d')),
-            Instruction::Match,
-        ];
-
-        // "xxxabc" とマッチするケース (true になる)
-        let mut visited1: HashSet<(usize, usize)> = HashSet::new();
-        let actual1: bool = eval_depth(&insts, "abc", 0, 0, true, &mut visited1).unwrap();
-        assert!(actual1);
-
-        // "abcxxx"とマッチするケース (false になる)
-        let mut visited2: HashSet<(usize, usize)> = HashSet::new();
-        let actual2: bool = eval_depth(&insts, "abcxxx", 0, 0, true, &mut visited2).unwrap();
-        assert!(!actual2);
-    }
-
-    #[test]
-    fn test_eval_depth_infinite_loop() {
-        // "abc(d*)*" が入力された Instruction
-        let insts: Vec<Instruction> = vec![
-            Instruction::Char(Char::Literal('a')),
-            Instruction::Char(Char::Literal('b')),
-            Instruction::Char(Char::Literal('c')),
-            Instruction::Split(4, 8),
-            Instruction::Split(5, 7),
-            Instruction::Char(Char::Literal('d')),
-            Instruction::Jump(4),
-            Instruction::Jump(3),
-            Instruction::Match,
-        ];
-
-        // "abcde" とマッチするケース（true）
-        let mut visited1: HashSet<(usize, usize)> = HashSet::new();
-        let actual1 = eval_depth(&insts, "abcde", 0, 0, false, &mut visited1).unwrap();
-        assert!(actual1);
-
-        // "bcdef" とマッチするケース（false）
-        let mut visited2: HashSet<(usize, usize)> = HashSet::new();
-        let actual2 = eval_depth(&insts, "bcdef", 0, 0, false, &mut visited2).unwrap();
-        assert!(!actual2);
-    }
-
-    #[test]
-    fn test_eval_depth_invalidpc() {
-        let insts: Vec<Instruction> = vec![
-            Instruction::Char(Char::Literal('a')),
-            Instruction::Char(Char::Literal('b')),
-            Instruction::Match,
-        ];
-        let mut visited: HashSet<(usize, usize)> = HashSet::new();
-        let actual = eval_depth(&insts, "abcd", usize::MAX, 0, false, &mut visited);
+    fn test_eval_invalid_pc() {
+        let inst = vec![Instruction::Jump(10)];
+        let actual = eval(&inst, "abc");
         assert_eq!(actual, Err(EvalError::InvalidPC));
+    }
+
+    #[test]
+    fn test_eval_from_start() {
+        let ast = parse("abc").unwrap();
+        let inst = compile(&ast).unwrap();
+        assert!(eval_from_start(&inst, "abcxxx").unwrap());
+        assert!(!eval_from_start(&inst, "xabc").unwrap());
     }
 }

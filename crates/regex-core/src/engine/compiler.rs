@@ -1,27 +1,25 @@
-//! Ast を命令列(Instruction)にコンパイルするための型・関数  
-//! "ab(c|b)" が入力された場合、以下にコンパイルする
-//! (左の数字はプログラムカウンタ)
-//!
-//! ```text
-//! 0 : Char(a)
-//! 1 : Char(b)
-//! 2 : Split 3, 5
-//! 3 : Char(c)
-//! 4 : Jump 6
-//! 5 : Char(d)
-//! 6 : Match
-//! ```
+//! Compile an AST into an instruction sequence (`Instruction`).
+#![allow(dead_code)]
 
-use crate::{
-    engine::{
-        instruction::{Char, Instruction},
-        parser::Ast,
-        safe_add,
-    },
-    error::CompileError,
-};
+use thiserror::Error;
 
-/// コンパイラの型
+use crate::engine::{ast::Ast, instruction::Instruction, safe_add};
+
+/// Errors returned while compiling AST nodes into instructions.
+#[derive(Debug, Error, PartialEq, Eq)]
+pub enum CompileError {
+    /// Program counter overflow while building the instruction stream.
+    #[error("CompileError: PCOverFlow")]
+    PCOverFlow,
+    /// A backreference points to a capture group that does not exist.
+    #[error("CompileError: InvalidBackreference({0})")]
+    InvalidBackreference(usize),
+}
+
+/// Stateful Thompson-style compiler.
+///
+/// `p_counter` tracks the next instruction address.
+/// `instructions` stores emitted bytecode-like instructions.
 #[derive(Default, Debug)]
 struct Compiler {
     p_counter: usize,
@@ -29,646 +27,345 @@ struct Compiler {
 }
 
 impl Compiler {
-    /// p_counter をインクリメントさせる
+    /// Increments the program counter by one with overflow checks.
     fn increment_p_counter(&mut self) -> Result<(), CompileError> {
         safe_add(&mut self.p_counter, &1, || CompileError::PCOverFlow)
     }
 
-    /// ヘルパー関数: 第二引数が仮値の Split 命令を命令列に挿入する。
-    ///
-    /// 命令列に split を挿入する際、第二引数に指定するコードが、挿入時点ではまだ値がわからない。  
-    /// そのため、ここでは仮の数値(0)を入れて、数値は後で更新する。
-    ///
-    /// この関数は、以下の手順で動作する。
-    /// 1. 現在のプログラムカウンタ値を記録する。
-    /// 2. p_counter をインクリメントする（Split 命令の左側アドレスとして使用）。
-    /// 3. Instruction::Split(左側アドレス, 仮の右側アドレス(0)) を命令列に追加。
-    /// 4. 挿入した命令のインデックスを返す。
-    fn insert_split_placeholder(&mut self) -> Result<usize, CompileError> {
-        let placeholder_index: usize = self.p_counter;
-        self.increment_p_counter()?;
-        self.instructions
-            .push(Instruction::Split(self.p_counter, 0));
-        Ok(placeholder_index)
+    /// Returns the address of the next instruction slot.
+    fn next_address(&self) -> Result<usize, CompileError> {
+        self.p_counter
+            .checked_add(1)
+            .ok_or(CompileError::PCOverFlow)
     }
 
-    /// ヘルパー関数: 指定されたインデックスの命令が Split または Jump 命令であれば、
-    /// そのアドレスを現在のプログラムカウンタに更新する。
-    ///
-    /// - Split 命令の場合、右側アドレス (second argument) を更新する。
-    /// - Jump 命令の場合、ジャンプ先アドレスを更新する。
-    fn update_instruction_address(
-        &mut self,
-        index: usize,
-        err: CompileError,
-    ) -> Result<(), CompileError> {
-        match self.instructions.get_mut(index) {
+    /// Appends one instruction and returns its address.
+    fn push_instruction(&mut self, instruction: Instruction) -> Result<usize, CompileError> {
+        let index = self.p_counter;
+        self.increment_p_counter()?;
+        self.instructions.push(instruction);
+        Ok(index)
+    }
+
+    /// Patches the right branch target of a previously emitted `Split`.
+    fn patch_split_right(&mut self, split_index: usize, target: usize) -> Result<(), CompileError> {
+        match self.instructions.get_mut(split_index) {
             Some(Instruction::Split(_, right)) => {
-                *right = self.p_counter;
+                *right = target;
                 Ok(())
             }
-            Some(Instruction::Jump(addr)) => {
-                *addr = self.p_counter;
-                Ok(())
-            }
-            _ => Err(err),
+            _ => Err(CompileError::PCOverFlow),
         }
     }
 
-    /// 入力された Ast の型に応じた関数を実行する
+    /// Patches the left branch target of a previously emitted `Split`.
+    fn patch_split_left(&mut self, split_index: usize, target: usize) -> Result<(), CompileError> {
+        match self.instructions.get_mut(split_index) {
+            Some(Instruction::Split(left, _)) => {
+                *left = target;
+                Ok(())
+            }
+            _ => Err(CompileError::PCOverFlow),
+        }
+    }
+
+    /// Patches the jump target of a previously emitted `Jump`.
+    fn patch_jump(&mut self, jump_index: usize, target: usize) -> Result<(), CompileError> {
+        match self.instructions.get_mut(jump_index) {
+            Some(Instruction::Jump(addr)) => {
+                *addr = target;
+                Ok(())
+            }
+            _ => Err(CompileError::PCOverFlow),
+        }
+    }
+
+    /// Emits instructions for one AST node.
     fn gen_expr(&mut self, ast: &Ast) -> Result<(), CompileError> {
         match ast {
-            Ast::AnyChar => self.gen_anychar(),
-            Ast::Char(c) => self.gen_char(*c),
-            Ast::Or(e1, e2) => self.gen_or(e1, e2),
-            Ast::Plus(ast) => self.gen_plus(ast),
-            Ast::Star(ast) => self.gen_star(ast),
-            Ast::Question(ast) => self.gen_question(ast),
-            Ast::Seq(v) => self.gen_seq(v),
+            Ast::Empty => Ok(()),
+            Ast::CharClass(class) => {
+                self.push_instruction(Instruction::CharClass(class.clone()))?;
+                Ok(())
+            }
+            Ast::Assertion(predicate) => {
+                self.push_instruction(Instruction::Assert(*predicate))?;
+                Ok(())
+            }
+            Ast::Capture { expr, index } => self.gen_capture(expr, *index),
+            Ast::ZeroOrMore { expr, greedy } => self.gen_zero_or_more(expr, *greedy),
+            Ast::OneOrMore { expr, greedy } => self.gen_one_or_more(expr, *greedy),
+            Ast::ZeroOrOne { expr, greedy } => self.gen_zero_or_one(expr, *greedy),
+            Ast::Repeat {
+                expr,
+                greedy,
+                min,
+                max,
+            } => self.gen_repeat(expr, *greedy, *min, *max),
+            Ast::Concat(exprs) => self.gen_concat(exprs),
+            Ast::Alternate(left, right) => self.gen_alternate(left, right),
+            Ast::Backreference(index) => {
+                self.push_instruction(Instruction::Backref(*index))?;
+                Ok(())
+            }
         }
     }
 
-    /// Ast::Char 型に対応する Instruction を生成し、instructions に push する
-    fn gen_char(&mut self, c: char) -> Result<(), CompileError> {
-        let inst: Instruction = Instruction::Char(Char::Literal(c));
-        self.increment_p_counter()?;
-        self.instructions.push(inst);
+    /// Emits capture boundary instructions around the nested expression.
+    fn gen_capture(&mut self, expr: &Ast, index: usize) -> Result<(), CompileError> {
+        self.push_instruction(Instruction::SaveStart(index))?;
+        self.gen_expr(expr)?;
+        self.push_instruction(Instruction::SaveEnd(index))?;
         Ok(())
     }
 
-    /// Ast::AnyChar 型に対応する Instruction を生成し、instructions に push する
-    fn gen_anychar(&mut self) -> Result<(), CompileError> {
-        let inst: Instruction = Instruction::Char(Char::Any);
-        self.increment_p_counter()?;
-        self.instructions.push(inst);
-        Ok(())
+    /// Emits a `*` quantifier as a loop with `Split` and `Jump`.
+    fn gen_zero_or_more(&mut self, expr: &Ast, greedy: bool) -> Result<(), CompileError> {
+        let expr_entry = self.next_address()?;
+        let split = if greedy {
+            Instruction::Split(expr_entry, 0)
+        } else {
+            Instruction::Split(0, expr_entry)
+        };
+        let split_index = self.push_instruction(split)?;
+        self.gen_expr(expr)?;
+        self.push_instruction(Instruction::Jump(split_index))?;
+
+        let out = self.p_counter;
+        if greedy {
+            self.patch_split_right(split_index, out)
+        } else {
+            self.patch_split_left(split_index, out)
+        }
     }
 
-    /// Ast::Star 型に対応する Instruction を生成し、instructions に push する  
-    /// a* 入力された場合、以下のような Instruction を生成する  
-    ///
-    /// ```text
-    /// 0 : split 1, 3
-    /// 1 : Char(a)
-    /// 2 : jump 0
-    /// 3 : ... 続き
-    /// ```
-    fn gen_star(&mut self, ast: &Ast) -> Result<(), CompileError> {
-        // split を挿入する。後で更新するため、格納した index を split_count に保持する。
-        let split_count: usize = self.insert_split_placeholder()?;
+    /// Emits a `+` quantifier as one mandatory match plus a loop.
+    fn gen_one_or_more(&mut self, expr: &Ast, greedy: bool) -> Result<(), CompileError> {
+        let loop_entry = self.p_counter;
+        self.gen_expr(expr)?;
 
-        // Ast を再帰的に処理する
-        self.gen_expr(ast)?;
-
-        // カウンタをインクリメントし、Jump を挿入する
-        self.increment_p_counter()?;
-        self.instructions.push(Instruction::Jump(split_count));
-
-        // Split の第二引数を更新する
-        self.update_instruction_address(split_count, CompileError::FailStar)
-    }
-
-    /// Ast::Plus 型に対応する Instruction を生成し、instructions に push する  
-    /// a+ 入力された場合、以下のような Instruction を生成する  
-    ///
-    /// ```text
-    /// 0 : Char(a)
-    /// 1 : split 0, 2
-    /// 2 : ... 続き
-    /// ```
-    fn gen_plus(&mut self, ast: &Ast) -> Result<(), CompileError> {
-        let left: usize = self.p_counter;
-        // Ast を再帰的に処理する
-        self.gen_expr(ast)?;
-
-        // カウンタをインクリメントし Split を挿入する
-        self.increment_p_counter()?;
-        self.instructions
-            .push(Instruction::Split(left, self.p_counter));
-        Ok(())
-    }
-
-    /// Ast::Question 型に対応する Instruction を生成し、instructions に push する  
-    /// a? 入力された場合、以下のような Instruction を生成する  
-    ///
-    /// ```text
-    /// 0 : split 1, 2
-    /// 1 : Char(a)
-    /// 2 : ... 続き
-    /// ```
-    fn gen_question(&mut self, ast: &Ast) -> Result<(), CompileError> {
-        // split を挿入する。後で更新するため、格納した index を split_count に保持する。
-        let split_count: usize = self.insert_split_placeholder()?;
-        // Ast を再帰的に処理する。
-        self.gen_expr(ast)?;
-
-        // Split の第二引数を更新する。
-        self.update_instruction_address(split_count, CompileError::FailQuestion)
-    }
-
-    /// Ast::Or 型に対応する Instruction を生成し、instructions に push する  
-    /// a|b が入力された場合、以下のような Instruction を生成する。  
-    ///
-    /// ```text
-    /// 0 : split 1, 3
-    /// 1 : Char(a)
-    /// 2 : jump 4
-    /// 3 : Char(b)
-    /// 4 : ... 続き
-    /// ```
-    fn gen_or(&mut self, expr1: &Ast, expr2: &Ast) -> Result<(), CompileError> {
-        // split を挿入する。後で更新するため、格納した index を split_count に保持する。
-        let split_count: usize = self.insert_split_placeholder()?;
-        // 1つ目の Ast を再帰的に処理する。
-        self.gen_expr(expr1)?;
-
-        let jump_count: usize = self.p_counter;
-        self.increment_p_counter()?;
-        // Jump を挿入する。引数には expr2 のコードの次のカウンタを指定する必要があるが、
-        // この時点ではまだ値がわからないので、ここでは仮の数値(0)を入れて、数値は後で更新する。
-        self.instructions.push(Instruction::Jump(0));
-
-        // Splitの第二引数を更新する。
-        self.update_instruction_address(split_count, CompileError::FailOr)?;
-
-        // 2つ目の Ast を再帰的に処理する。
-        self.gen_expr(expr2)?;
-
-        // Jump の引数を更新する。
-        self.update_instruction_address(jump_count, CompileError::FailOr)
-    }
-
-    /// Ast::Seq 型に対応する Instruction を生成し、instructions に push する
-    fn gen_seq(&mut self, vec: &Vec<Ast>) -> Result<(), CompileError> {
-        for ast in vec {
-            self.gen_expr(ast)?;
+        let out = self.next_address()?;
+        if greedy {
+            self.push_instruction(Instruction::Split(loop_entry, out))?;
+        } else {
+            self.push_instruction(Instruction::Split(out, loop_entry))?;
         }
         Ok(())
     }
 
-    /// Ast から Instruction を生成し、instructions に push する  
-    /// 最後に Match を instructions に push する
-    fn gen_code(&mut self, ast: &Ast) -> Result<(), CompileError> {
-        // Ast から Instruction を生成し、instructions に挿入する
-        self.gen_expr(ast)?;
+    /// Emits a `?` quantifier as one conditional branch.
+    fn gen_zero_or_one(&mut self, expr: &Ast, greedy: bool) -> Result<(), CompileError> {
+        let expr_entry = self.next_address()?;
+        let split = if greedy {
+            Instruction::Split(expr_entry, 0)
+        } else {
+            Instruction::Split(0, expr_entry)
+        };
+        let split_index = self.push_instruction(split)?;
+        self.gen_expr(expr)?;
 
-        // Match を instructions に挿入する
-        self.increment_p_counter()?;
-        self.instructions.push(Instruction::Match);
+        let out = self.p_counter;
+        if greedy {
+            self.patch_split_right(split_index, out)
+        } else {
+            self.patch_split_left(split_index, out)
+        }
+    }
+
+    /// Emits bounded or unbounded repetition (`{m}`, `{m,n}`, `{m,}`).
+    fn gen_repeat(
+        &mut self,
+        expr: &Ast,
+        greedy: bool,
+        min: u32,
+        max: Option<u32>,
+    ) -> Result<(), CompileError> {
+        for _ in 0..min {
+            self.gen_expr(expr)?;
+        }
+
+        match max {
+            Some(max_count) => {
+                if max_count <= min {
+                    return Ok(());
+                }
+                for _ in min..max_count {
+                    self.gen_zero_or_one(expr, greedy)?;
+                }
+                Ok(())
+            }
+            None => self.gen_zero_or_more(expr, greedy),
+        }
+    }
+
+    /// Emits concatenated expressions in order.
+    fn gen_concat(&mut self, exprs: &[Ast]) -> Result<(), CompileError> {
+        for expr in exprs {
+            self.gen_expr(expr)?;
+        }
         Ok(())
+    }
+
+    /// Emits alternation using one `Split` and one trailing `Jump`.
+    fn gen_alternate(&mut self, left: &Ast, right: &Ast) -> Result<(), CompileError> {
+        let left_entry = self.next_address()?;
+        let split_index = self.push_instruction(Instruction::Split(left_entry, 0))?;
+
+        self.gen_expr(left)?;
+        let jump_index = self.push_instruction(Instruction::Jump(0))?;
+
+        let right_entry = self.p_counter;
+        self.patch_split_right(split_index, right_entry)?;
+        self.gen_expr(right)?;
+
+        let out = self.p_counter;
+        self.patch_jump(jump_index, out)
+    }
+
+    /// Finalizes the compiled program by appending `Match`.
+    fn finish(mut self) -> Result<Vec<Instruction>, CompileError> {
+        self.push_instruction(Instruction::Match)?;
+        Ok(self.instructions)
     }
 }
 
-/// コード生成を行う関数
+/// Returns the maximum capture index used in the AST.
+fn max_capture_index(ast: &Ast) -> usize {
+    match ast {
+        Ast::Capture { expr, index } => (*index).max(max_capture_index(expr)),
+        Ast::ZeroOrMore { expr, .. }
+        | Ast::OneOrMore { expr, .. }
+        | Ast::ZeroOrOne { expr, .. }
+        | Ast::Repeat { expr, .. } => max_capture_index(expr),
+        Ast::Concat(exprs) => exprs.iter().map(max_capture_index).max().unwrap_or(0),
+        Ast::Alternate(left, right) => max_capture_index(left).max(max_capture_index(right)),
+        _ => 0,
+    }
+}
+
+/// Validates that every backreference points to an existing capture.
+fn validate_backreferences(ast: &Ast, max_capture: usize) -> Result<(), CompileError> {
+    match ast {
+        Ast::Backreference(index) => {
+            if *index == 0 || *index > max_capture {
+                Err(CompileError::InvalidBackreference(*index))
+            } else {
+                Ok(())
+            }
+        }
+        Ast::Capture { expr, .. }
+        | Ast::ZeroOrMore { expr, .. }
+        | Ast::OneOrMore { expr, .. }
+        | Ast::ZeroOrOne { expr, .. }
+        | Ast::Repeat { expr, .. } => validate_backreferences(expr, max_capture),
+        Ast::Concat(exprs) => {
+            for expr in exprs {
+                validate_backreferences(expr, max_capture)?;
+            }
+            Ok(())
+        }
+        Ast::Alternate(left, right) => {
+            validate_backreferences(left, max_capture)?;
+            validate_backreferences(right, max_capture)
+        }
+        _ => Ok(()),
+    }
+}
+
+/// Compiles an AST into an executable instruction sequence.
 pub fn compile(ast: &Ast) -> Result<Vec<Instruction>, CompileError> {
-    let mut compiler: Compiler = Compiler::default();
-    compiler.gen_code(ast)?;
-    Ok(compiler.instructions)
-}
+    let max_capture = max_capture_index(ast);
+    validate_backreferences(ast, max_capture)?;
 
-// ----- テストコード -----
+    let mut compiler = Compiler::default();
+    compiler.gen_expr(ast)?;
+    compiler.finish()
+}
 
 #[cfg(test)]
 mod tests {
-
-    use crate::{
-        engine::{
-            compiler::{Compiler, compile},
-            instruction::{Char, Instruction},
-            parser::Ast,
-        },
-        error::CompileError,
+    use crate::engine::{
+        ast::{CharClass, CharRange, Predicate},
+        compiler::{CompileError, compile},
+        instruction::Instruction,
+        parser::parse,
     };
 
-    #[test]
-    fn test_increment_p_counter_success() {
-        let count: usize = 10;
-        let mut compiler: Compiler = Compiler {
-            p_counter: count,
-            instructions: Vec::new(),
-        };
-
-        compiler.increment_p_counter().unwrap();
-        let actual: usize = compiler.p_counter;
-        assert_eq!(actual, count + 1);
+    fn literal(c: char) -> Instruction {
+        Instruction::CharClass(CharClass::new(vec![CharRange { start: c, end: c }], false))
     }
 
     #[test]
-    fn test_increment_p_counter_failure() {
-        let count: usize = usize::MAX;
-        let mut compiler: Compiler = Compiler {
-            p_counter: count,
-            instructions: Vec::new(),
-        };
-
-        let actual = compiler.increment_p_counter();
-        assert_eq!(actual, Err(CompileError::PCOverFlow));
-    }
-
-    #[test]
-    fn test_insert_split_placeholder_success() {
-        // 初期状態: p_counter = 0, instructions は空
-        let mut compiler = Compiler {
-            p_counter: 0,
-            instructions: Vec::new(),
-        };
-
-        // 仮の Split 命令を挿入する
-        let result = compiler.insert_split_placeholder();
-        // 戻り値は初期の p_counter (0) であることを確認
-        assert_eq!(result, Ok(0));
-
-        // p_counter はインクリメントされ、1 になっているはず
-        assert_eq!(compiler.p_counter, 1);
-
-        // instructions に Split 命令が 1 つ挿入され、左側アドレスが p_counter (1)、
-        // 右側は仮値 (0) となっていることを確認
-        assert_eq!(compiler.instructions.len(), 1);
-        match &compiler.instructions[0] {
-            Instruction::Split(left, right) => {
-                assert_eq!(*left, 1);
-                assert_eq!(*right, 0);
-            }
-            _ => unreachable!(),
-        }
-    }
-
-    #[test]
-    fn test_insert_split_placeholder_failure() {
-        // p_counter が usize::MAX の場合、increment_p_counter が失敗するのでエラーが返るはず
-        let mut compiler = Compiler {
-            p_counter: usize::MAX,
-            instructions: Vec::new(),
-        };
-
-        let result = compiler.insert_split_placeholder();
-        // エラーとして CompileError::PCOverFlow が返ることを確認
-        assert_eq!(result, Err(CompileError::PCOverFlow));
-        // instructions は更新されず、空のままであることを確認
-        assert!(compiler.instructions.is_empty());
-    }
-
-    #[test]
-    fn test_update_instruction_address_success() {
-        // Compiler を初期化。p_counter は 42 とする
-        let mut compiler = Compiler {
-            p_counter: 42,
-            instructions: vec![
-                Instruction::Split(10, 0), // 左側は任意の値、右側は仮値 0
-                Instruction::Jump(0),      // 仮値 0
-            ],
-        };
-
-        // インデックス 0 の Split 命令の右側アドレスを更新する
-        let result = compiler.update_instruction_address(0, CompileError::FailOr);
-        assert!(result.is_ok());
-        if let Some(Instruction::Split(_, right)) = compiler.instructions.first() {
-            assert_eq!(*right, 42);
-        }
-
-        // インデックス 1 の Jump 命令のアドレスを更新する
-        let result = compiler.update_instruction_address(1, CompileError::FailOr);
-        assert!(result.is_ok());
-        if let Some(Instruction::Jump(addr)) = compiler.instructions.get(1) {
-            assert_eq!(*addr, 42);
-        }
-    }
-
-    #[test]
-    fn test_update_instruction_address_failure_invalid_index() {
-        let mut compiler = Compiler {
-            p_counter: 99,
-            instructions: vec![], // 空の命令リスト
-        };
-
-        let result = compiler.update_instruction_address(0, CompileError::FailOr);
-        assert!(result.is_err());
-        assert_eq!(result.unwrap_err(), CompileError::FailOr);
-    }
-
-    #[test]
-    fn test_update_instruction_address_failure_invalid_instruction() {
-        let mut compiler = Compiler {
-            p_counter: 99,
-            instructions: vec![Instruction::Char(Char::Literal('a')), Instruction::Match],
-        };
-
-        // インデックス 0 の命令は Char なのでエラーになる
-        let result = compiler.update_instruction_address(0, CompileError::FailOr);
-        assert!(result.is_err());
-        assert_eq!(result.unwrap_err(), CompileError::FailOr);
-
-        // インデックス 1 の命令は Match なのでエラーになる
-        let result = compiler.update_instruction_address(1, CompileError::FailOr);
-        assert!(result.is_err());
-        assert_eq!(result.unwrap_err(), CompileError::FailOr);
-    }
-
-    #[test]
-    fn test_gen_char_success() {
-        let expect: Vec<Instruction> = vec![Instruction::Char(Char::Literal('a'))];
-        let mut compiler: Compiler = Compiler {
-            p_counter: 0,
-            instructions: Vec::new(),
-        };
-
-        let _ = compiler.gen_char('a');
-        let actual: Vec<Instruction> = compiler.instructions;
+    fn test_compile_literal() {
+        let ast = parse("abc").unwrap();
+        let actual = compile(&ast).unwrap();
+        let expect = vec![literal('a'), literal('b'), literal('c'), Instruction::Match];
         assert_eq!(actual, expect);
     }
 
     #[test]
-    fn test_gen_char_failure() {
-        let expect = Err(CompileError::PCOverFlow);
-        let mut compiler: Compiler = Compiler {
-            p_counter: usize::MAX,
-            instructions: Vec::new(),
-        };
-
-        let actual = compiler.gen_char('a');
-        assert_eq!(actual, expect);
-    }
-
-    #[test]
-    fn test_gen_anychar() {
-        let expect: Vec<Instruction> = vec![Instruction::Char(Char::Any)];
-
-        let mut compiler: Compiler = Compiler {
-            p_counter: 0,
-            instructions: Vec::new(),
-        };
-        let _ = compiler.gen_anychar();
-        assert_eq!(compiler.instructions, expect)
-    }
-
-    #[test]
-    fn test_gen_star_success() {
-        // a* が入力されたケース
-        let expect: Vec<Instruction> = vec![
+    fn test_compile_alternate() {
+        let ast = parse("a|b").unwrap();
+        let actual = compile(&ast).unwrap();
+        let expect = vec![
             Instruction::Split(1, 3),
-            Instruction::Char(Char::Literal('a')),
-            Instruction::Jump(0),
-        ];
-
-        let mut compiler: Compiler = Compiler {
-            p_counter: 0,
-            instructions: Vec::new(),
-        };
-
-        let ast: Box<Ast> = Box::new(Ast::Char('a'));
-
-        let _ = compiler.gen_star(&ast);
-        let actual: Vec<Instruction> = compiler.instructions;
-        assert_eq!(actual, expect);
-    }
-
-    #[test]
-    fn test_gen_star_failure() {
-        // a* が入力されたケース
-        let expect: Result<(), CompileError> = Err(CompileError::FailStar);
-
-        let mut compiler: Compiler = Compiler {
-            p_counter: 100,
-            instructions: Vec::new(),
-        };
-
-        let ast: Box<Ast> = Box::new(Ast::Char('a'));
-
-        let actual: Result<(), CompileError> = compiler.gen_star(&ast);
-        assert_eq!(actual, expect);
-    }
-
-    #[test]
-    fn test_gen_plus_success() {
-        // a+ が入力されたケース
-        let expect: Vec<Instruction> = vec![
-            Instruction::Char(Char::Literal('a')),
-            Instruction::Split(0, 2),
-        ];
-
-        let mut compiler: Compiler = Compiler {
-            p_counter: 0,
-            instructions: Vec::new(),
-        };
-
-        let ast: Box<Ast> = Box::new(Ast::Char('a'));
-
-        let _ = compiler.gen_plus(&ast);
-        let actual: Vec<Instruction> = compiler.instructions;
-        assert_eq!(actual, expect);
-    }
-
-    #[test]
-    fn test_gen_question_success() {
-        // a? が入力されたケース
-        let expect: Vec<Instruction> = vec![
-            Instruction::Split(1, 2),
-            Instruction::Char(Char::Literal('a')),
-        ];
-
-        let mut compiler: Compiler = Compiler {
-            p_counter: 0,
-            instructions: Vec::new(),
-        };
-
-        let ast: Box<Ast> = Box::new(Ast::Char('a'));
-
-        let _ = compiler.gen_question(&ast);
-        let actual: Vec<Instruction> = compiler.instructions;
-        assert_eq!(actual, expect);
-    }
-
-    #[test]
-    fn test_gen_question_failure() {
-        let expect: Result<(), CompileError> = Err(CompileError::FailQuestion);
-
-        let mut compiler: Compiler = Compiler {
-            p_counter: 100,
-            instructions: Vec::new(),
-        };
-        let ast: Box<Ast> = Box::new(Ast::Char('a'));
-
-        let actual: Result<(), CompileError> = compiler.gen_question(&ast);
-        assert_eq!(actual, expect);
-    }
-
-    #[test]
-    fn test_gen_or_success() {
-        // a|b が入力されたケース
-        let expect: Vec<Instruction> = vec![
-            Instruction::Split(1, 3),
-            Instruction::Char(Char::Literal('a')),
+            literal('a'),
             Instruction::Jump(4),
-            Instruction::Char(Char::Literal('b')),
-        ];
-
-        let mut compiler: Compiler = Compiler {
-            p_counter: 0,
-            instructions: Vec::new(),
-        };
-
-        let e1: Box<Ast> = Box::new(Ast::Seq(vec![Ast::Char('a')]));
-        let e2: Box<Ast> = Box::new(Ast::Seq(vec![Ast::Char('b')]));
-
-        let _ = compiler.gen_or(&e1, &e2);
-        let actual: Vec<Instruction> = compiler.instructions;
-        assert_eq!(actual, expect);
-    }
-
-    #[test]
-    fn test_gen_or_failure() {
-        let expect: Result<(), CompileError> = Err(CompileError::FailOr);
-
-        let mut compiler: Compiler = Compiler {
-            p_counter: 100,
-            instructions: Vec::new(),
-        };
-
-        let e1: Box<Ast> = Box::new(Ast::Seq(vec![Ast::Char('a')]));
-        let e2: Box<Ast> = Box::new(Ast::Seq(vec![Ast::Char('b')]));
-
-        let actual: Result<(), CompileError> = compiler.gen_or(&e1, &e2);
-        assert_eq!(actual, expect);
-    }
-
-    #[test]
-    fn test_gen_seq_success() {
-        let expect: Vec<Instruction> = vec![
-            Instruction::Char(Char::Literal('a')),
-            Instruction::Char(Char::Literal('b')),
-            Instruction::Char(Char::Literal('c')),
-        ];
-
-        let v: Vec<Ast> = vec![Ast::Char('a'), Ast::Char('b'), Ast::Char('c')];
-
-        let mut compiler: Compiler = Compiler {
-            p_counter: 0,
-            instructions: Vec::new(),
-        };
-
-        let _ = compiler.gen_seq(&v);
-        let actual: Vec<Instruction> = compiler.instructions;
-        assert_eq!(actual, expect);
-    }
-
-    #[test]
-    fn test_gen_code_containe_or() {
-        // a|b が入力されたケース
-        let expect: Vec<Instruction> = vec![
-            Instruction::Split(1, 3),
-            Instruction::Char(Char::Literal('a')),
-            Instruction::Jump(4),
-            Instruction::Char(Char::Literal('b')),
+            literal('b'),
             Instruction::Match,
         ];
-
-        let mut compiler: Compiler = Compiler {
-            p_counter: 0,
-            instructions: Vec::new(),
-        };
-
-        let e1: Box<Ast> = Box::new(Ast::Seq(vec![Ast::Char('a')]));
-        let e2: Box<Ast> = Box::new(Ast::Seq(vec![Ast::Char('b')]));
-        let or = Ast::Or(e1, e2);
-
-        let _ = compiler.gen_code(&or);
-        let actual: Vec<Instruction> = compiler.instructions;
         assert_eq!(actual, expect);
     }
 
     #[test]
-    fn test_gen_code_contain_any() {
-        // a.b が入力されたケース
-        let expect: Vec<Instruction> = vec![
-            Instruction::Char(Char::Literal('a')),
-            Instruction::Char(Char::Any),
-            Instruction::Char(Char::Literal('b')),
-            Instruction::Match,
-        ];
-        let mut compiler: Compiler = Compiler {
-            p_counter: 0,
-            instructions: Vec::new(),
-        };
-        let ast: Box<Ast> = Box::new(Ast::Seq(vec![Ast::Char('a'), Ast::AnyChar, Ast::Char('b')]));
-        let _ = compiler.gen_code(&ast);
-        let actual: Vec<Instruction> = compiler.instructions;
-        assert_eq!(actual, expect);
-    }
-
-    #[test]
-    fn test_gen_code_contain_star() {
-        // a*b が入力されたケース
-        let expect: Vec<Instruction> = vec![
+    fn test_compile_star() {
+        let ast = parse("a*").unwrap();
+        let actual = compile(&ast).unwrap();
+        let expect = vec![
             Instruction::Split(1, 3),
-            Instruction::Char(Char::Literal('a')),
+            literal('a'),
             Instruction::Jump(0),
             Instruction::Match,
         ];
-        let mut compiler: Compiler = Compiler {
-            p_counter: 0,
-            instructions: Vec::new(),
-        };
-        let ast: Box<Ast> = Box::new(Ast::Star(Box::new(Ast::Char('a'))));
-        let _ = compiler.gen_code(&ast);
-        let actual: Vec<Instruction> = compiler.instructions;
         assert_eq!(actual, expect);
     }
 
     #[test]
-    fn test_gen_code_contain_plus() {
-        // a+b が入力されたケース
-        let expect: Vec<Instruction> = vec![
-            Instruction::Char(Char::Literal('a')),
-            Instruction::Split(0, 2),
+    fn test_compile_repeat() {
+        let ast = parse("a{2,3}").unwrap();
+        let actual = compile(&ast).unwrap();
+        let expect = vec![
+            literal('a'),
+            literal('a'),
+            Instruction::Split(3, 4),
+            literal('a'),
             Instruction::Match,
         ];
-        let mut compiler: Compiler = Compiler {
-            p_counter: 0,
-            instructions: Vec::new(),
-        };
-        let ast: Box<Ast> = Box::new(Ast::Plus(Box::new(Ast::Char('a'))));
-        let _ = compiler.gen_code(&ast);
-        let actual: Vec<Instruction> = compiler.instructions;
         assert_eq!(actual, expect);
     }
 
     #[test]
-    fn test_gen_code_contain_question() {
-        // a?b が入力されたケース
-        let expect: Vec<Instruction> = vec![
-            Instruction::Split(1, 2),
-            Instruction::Char(Char::Literal('a')),
-            Instruction::Char(Char::Literal('b')),
+    fn test_compile_assert_and_backref() {
+        let ast = parse("^(abc)\\1$").unwrap();
+        let actual = compile(&ast).unwrap();
+        let expect = vec![
+            Instruction::Assert(Predicate::StartOfLine),
+            Instruction::SaveStart(1),
+            literal('a'),
+            literal('b'),
+            literal('c'),
+            Instruction::SaveEnd(1),
+            Instruction::Backref(1),
+            Instruction::Assert(Predicate::EndOfLine),
             Instruction::Match,
         ];
-        let mut compiler: Compiler = Compiler {
-            p_counter: 0,
-            instructions: Vec::new(),
-        };
-        let ast: Box<Ast> = Box::new(Ast::Seq(vec![
-            Ast::Question(Box::new(Ast::Char('a'))),
-            Ast::Char('b'),
-        ]));
-        let _ = compiler.gen_code(&ast);
-        let actual: Vec<Instruction> = compiler.instructions;
         assert_eq!(actual, expect);
     }
 
     #[test]
-    fn test_compile_success() {
-        let expect: Vec<Instruction> = vec![
-            Instruction::Split(1, 3),
-            Instruction::Char(Char::Literal('a')),
-            Instruction::Jump(4),
-            Instruction::Char(Char::Literal('b')),
-            Instruction::Match,
-        ];
-
-        let e1: Box<Ast> = Box::new(Ast::Seq(vec![Ast::Char('a')]));
-        let e2: Box<Ast> = Box::new(Ast::Seq(vec![Ast::Char('b')]));
-        let or = Ast::Or(e1, e2);
-
-        let actual = compile(&or).unwrap();
-        assert_eq!(actual, expect);
+    fn test_compile_invalid_backreference() {
+        let ast = parse("(a)\\2").unwrap();
+        let actual = compile(&ast);
+        assert_eq!(actual, Err(CompileError::InvalidBackreference(2)));
     }
 }
