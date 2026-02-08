@@ -9,7 +9,7 @@ Rust で実装した正規表現エンジンと grep 風 CLI です。
 ## インストール
 
 ```sh
-cargo install --git https://github.com/shu-kitamura/regular-expression.git -p regex-cli
+cargo install --git https://github.com/shu-kitamura/regular-expression.git
 ```
 
 ## CLI の使い方
