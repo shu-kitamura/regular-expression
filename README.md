@@ -6,10 +6,10 @@ This workspace contains:
 - `regex-core`: parser/compiler/evaluator library.
 - `regex-cli`: command-line tool (`regex`) built on top of `regex-core`.
 
-## Installation
+## Command Installation
 
 ```sh
-cargo install --git https://github.com/shu-kitamura/regular-expression.git -p regex-cli
+cargo install --git https://github.com/shu-kitamura/regular-expression.git
 ```
 
 ## CLI Usage
