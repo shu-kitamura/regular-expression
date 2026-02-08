@@ -6,7 +6,7 @@ edition.workspace = true
 [dependencies]
 clap = { version = "4.5.11", features = ["derive"] }
 regex-core = { path = "../regex-core" }
-thiserror = "1.0"
+thiserror = "2.0.18"
 
 [dev-dependencies]
 tempfile = "3.0"
