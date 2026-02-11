@@ -1,5 +1,4 @@
 //! Evaluate an instruction sequence.
-#![allow(dead_code)]
 
 use std::collections::HashSet;
 

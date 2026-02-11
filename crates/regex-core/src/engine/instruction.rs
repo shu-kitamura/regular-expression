@@ -1,5 +1,4 @@
 //! Instruction set used by the compiler and evaluator.
-#![allow(dead_code)]
 
 use std::fmt::{self, Display};
 

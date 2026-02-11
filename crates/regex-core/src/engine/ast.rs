@@ -1,5 +1,4 @@
 //! AST definitions for the regex engine.
-#![allow(dead_code)]
 
 /// Inclusive character range.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -8,17 +7,6 @@ pub struct CharRange {
     pub start: char,
     /// Inclusive end character.
     pub end: char,
-}
-
-impl CharRange {
-    /// Creates a range when `start <= end`; otherwise returns `None`.
-    pub fn new(start: char, end: char) -> Option<Self> {
-        if start <= end {
-            Some(Self { start, end })
-        } else {
-            None
-        }
-    }
 }
 
 /// Character class.
@@ -41,6 +29,7 @@ impl CharClass {
 }
 
 /// Zero-width assertion kinds.
+#[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Predicate {
     /// Line start assertion (`^`).
