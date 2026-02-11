@@ -53,9 +53,9 @@ struct Parser {
     captures: usize,
 }
 
-/// Parses `regex` and returns its AST representation.
-pub fn parse(regex: &str) -> Result<Ast, ParseError> {
-    let mut parser = Parser::new(regex);
+/// Parses `pattern` and returns its AST representation.
+pub fn parse(pattern: &str) -> Result<Ast, ParseError> {
+    let mut parser = Parser::new(pattern);
     let ast = parser.parse_expression()?;
     if parser.peek().is_some() {
         return Err(ParseError::UnexpectedChar(parser.peek().unwrap()));
@@ -65,9 +65,9 @@ pub fn parse(regex: &str) -> Result<Ast, ParseError> {
 
 impl Parser {
     /// Creates a parser from a pattern string.
-    fn new(regex: &str) -> Self {
+    fn new(pattern: &str) -> Self {
         Self {
-            input: regex.chars().collect(),
+            input: pattern.chars().collect(),
             pos: 0,
             captures: 1,
         }
@@ -205,10 +205,7 @@ impl Parser {
             Some(ch) if Self::is_special_char(ch) => Err(ParseError::UnexpectedChar(ch)),
             Some(_) => {
                 let ch = self.next().ok_or(ParseError::UnexpectedEnd)?;
-                Ok(Ast::CharClass(CharClass::new(
-                    vec![CharRange { start: ch, end: ch }],
-                    false,
-                )))
+                Ok(Self::parse_single_char(ch))
             }
             None => Err(ParseError::UnexpectedEnd),
         }
@@ -287,7 +284,7 @@ impl Parser {
                 }
                 Ast::Backreference(num as usize)
             }
-            _ => single_char_class(ch),
+            _ => Self::parse_single_char(ch),
         };
         Ok(ast)
     }
@@ -369,20 +366,28 @@ impl Parser {
             false
         }
     }
-}
 
-/// Builds an `Ast::CharClass` representing exactly one literal character.
-fn single_char_class(ch: char) -> Ast {
-    Ast::CharClass(CharClass::new(
-        vec![CharRange { start: ch, end: ch }],
-        false,
-    ))
+    /// Builds an `Ast::CharClass` that matches exactly one literal character.
+    fn parse_single_char(ch: char) -> Ast {
+        Ast::CharClass(CharClass::new(
+            vec![CharRange { start: ch, end: ch }],
+            false,
+        ))
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{ParseError, Parser, parse, single_char_class};
+    use super::{ParseError, Parser, parse};
     use crate::engine::ast::{Ast, CharClass, CharRange, Predicate};
+
+    /// helper to build a single-character class AST
+    fn single_char_class(ch: char) -> Ast {
+        Ast::CharClass(CharClass::new(
+            vec![CharRange { start: ch, end: ch }],
+            false,
+        ))
+    }
 
     #[test]
     fn test_parse_abc() {
