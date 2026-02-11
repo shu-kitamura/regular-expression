@@ -1,7 +1,6 @@
 //! Recursive-descent parser for regex patterns.
 //!
 //! The parser converts a pattern string into an `Ast` used by the compiler.
-#![allow(dead_code)]
 
 use crate::engine::ast::{Ast, CharClass, CharRange, Predicate};
 use thiserror::Error;

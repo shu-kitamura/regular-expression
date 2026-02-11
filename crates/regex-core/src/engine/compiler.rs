@@ -1,5 +1,4 @@
 //! Compile an AST into an instruction sequence (`Instruction`).
-#![allow(dead_code)]
 
 use thiserror::Error;
 
