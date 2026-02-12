@@ -380,21 +380,13 @@ mod tests {
     use super::{ParseError, Parser, parse};
     use crate::engine::ast::{Ast, CharClass, CharRange, Predicate};
 
-    /// helper to build a single-character class AST
-    fn single_char_class(ch: char) -> Ast {
-        Ast::CharClass(CharClass::new(
-            vec![CharRange { start: ch, end: ch }],
-            false,
-        ))
-    }
-
     #[test]
     fn test_parse_abc() {
         let actual = parse("abc").unwrap();
         let expect = Ast::Concat(vec![
-            single_char_class('a'),
-            single_char_class('b'),
-            single_char_class('c'),
+            Parser::parse_single_char('a'),
+            Parser::parse_single_char('b'),
+            Parser::parse_single_char('c'),
         ]);
         assert_eq!(actual, expect);
     }
@@ -404,10 +396,10 @@ mod tests {
         let actual = parse("a|b|c").unwrap();
         let expect = Ast::Alternate(
             Box::new(Ast::Alternate(
-                Box::new(single_char_class('a')),
-                Box::new(single_char_class('b')),
+                Box::new(Parser::parse_single_char('a')),
+                Box::new(Parser::parse_single_char('b')),
             )),
-            Box::new(single_char_class('c')),
+            Box::new(Parser::parse_single_char('c')),
         );
         assert_eq!(actual, expect);
     }
@@ -417,12 +409,12 @@ mod tests {
         let actual = parse("ab|cd").unwrap();
         let expect = Ast::Alternate(
             Box::new(Ast::Concat(vec![
-                single_char_class('a'),
-                single_char_class('b'),
+                Parser::parse_single_char('a'),
+                Parser::parse_single_char('b'),
             ])),
             Box::new(Ast::Concat(vec![
-                single_char_class('c'),
-                single_char_class('d'),
+                Parser::parse_single_char('c'),
+                Parser::parse_single_char('d'),
             ])),
         );
         assert_eq!(actual, expect);
@@ -431,11 +423,17 @@ mod tests {
     #[test]
     fn test_parse_alternation_empty_side() {
         let actual = parse("a|").unwrap();
-        let expect = Ast::Alternate(Box::new(single_char_class('a')), Box::new(Ast::Empty));
+        let expect = Ast::Alternate(
+            Box::new(Parser::parse_single_char('a')),
+            Box::new(Ast::Empty),
+        );
         assert_eq!(actual, expect);
 
         let actual = parse("|a").unwrap();
-        let expect = Ast::Alternate(Box::new(Ast::Empty), Box::new(single_char_class('a')));
+        let expect = Ast::Alternate(
+            Box::new(Ast::Empty),
+            Box::new(Parser::parse_single_char('a')),
+        );
         assert_eq!(actual, expect);
     }
 
@@ -444,30 +442,30 @@ mod tests {
         let actual_star = parse("a*b").unwrap();
         let expect_star = Ast::Concat(vec![
             Ast::ZeroOrMore {
-                expr: Box::new(single_char_class('a')),
+                expr: Box::new(Parser::parse_single_char('a')),
                 greedy: true,
             },
-            single_char_class('b'),
+            Parser::parse_single_char('b'),
         ]);
         assert_eq!(actual_star, expect_star);
 
         let actual_plus = parse("a+b").unwrap();
         let expect_plus = Ast::Concat(vec![
             Ast::OneOrMore {
-                expr: Box::new(single_char_class('a')),
+                expr: Box::new(Parser::parse_single_char('a')),
                 greedy: true,
             },
-            single_char_class('b'),
+            Parser::parse_single_char('b'),
         ]);
         assert_eq!(actual_plus, expect_plus);
 
         let actual_question = parse("a?b").unwrap();
         let expect_question = Ast::Concat(vec![
             Ast::ZeroOrOne {
-                expr: Box::new(single_char_class('a')),
+                expr: Box::new(Parser::parse_single_char('a')),
                 greedy: true,
             },
-            single_char_class('b'),
+            Parser::parse_single_char('b'),
         ]);
         assert_eq!(actual_question, expect_question);
     }
@@ -478,8 +476,8 @@ mod tests {
         let expect = Ast::ZeroOrMore {
             expr: Box::new(Ast::Capture {
                 expr: Box::new(Ast::Concat(vec![
-                    single_char_class('a'),
-                    single_char_class('b'),
+                    Parser::parse_single_char('a'),
+                    Parser::parse_single_char('b'),
                 ])),
                 index: 1,
             }),
@@ -491,8 +489,8 @@ mod tests {
         let expect = Ast::Repeat {
             expr: Box::new(Ast::Capture {
                 expr: Box::new(Ast::Concat(vec![
-                    single_char_class('a'),
-                    single_char_class('b'),
+                    Parser::parse_single_char('a'),
+                    Parser::parse_single_char('b'),
                 ])),
                 index: 1,
             }),
@@ -507,7 +505,7 @@ mod tests {
     fn test_parse_repeat_forms() {
         let actual = parse("a{3}").unwrap();
         let expect = Ast::Repeat {
-            expr: Box::new(single_char_class('a')),
+            expr: Box::new(Parser::parse_single_char('a')),
             greedy: true,
             min: 3,
             max: Some(3),
@@ -516,7 +514,7 @@ mod tests {
 
         let actual = parse("a{2,}").unwrap();
         let expect = Ast::Repeat {
-            expr: Box::new(single_char_class('a')),
+            expr: Box::new(Parser::parse_single_char('a')),
             greedy: true,
             min: 2,
             max: None,
@@ -525,7 +523,7 @@ mod tests {
 
         let actual = parse("a{2,5}").unwrap();
         let expect = Ast::Repeat {
-            expr: Box::new(single_char_class('a')),
+            expr: Box::new(Parser::parse_single_char('a')),
             greedy: true,
             min: 2,
             max: Some(5),
@@ -641,7 +639,7 @@ mod tests {
     fn test_parse_char_class_concat() {
         let actual = parse("a[bc]d").unwrap();
         let expect = Ast::Concat(vec![
-            single_char_class('a'),
+            Parser::parse_single_char('a'),
             Ast::CharClass(CharClass::new(
                 vec![
                     CharRange {
@@ -655,7 +653,7 @@ mod tests {
                 ],
                 false,
             )),
-            single_char_class('d'),
+            Parser::parse_single_char('d'),
         ]);
         assert_eq!(actual, expect);
     }
@@ -689,17 +687,17 @@ mod tests {
         let expect = Ast::Concat(vec![
             Ast::Capture {
                 expr: Box::new(Ast::Concat(vec![
-                    single_char_class('a'),
-                    single_char_class('b'),
-                    single_char_class('c'),
+                    Parser::parse_single_char('a'),
+                    Parser::parse_single_char('b'),
+                    Parser::parse_single_char('c'),
                 ])),
                 index: 1,
             },
             Ast::Capture {
                 expr: Box::new(Ast::Concat(vec![
-                    single_char_class('d'),
-                    single_char_class('e'),
-                    single_char_class('f'),
+                    Parser::parse_single_char('d'),
+                    Parser::parse_single_char('e'),
+                    Parser::parse_single_char('f'),
                 ])),
                 index: 2,
             },
@@ -713,9 +711,9 @@ mod tests {
         let expect = Ast::Concat(vec![
             Ast::Capture {
                 expr: Box::new(Ast::Concat(vec![
-                    single_char_class('a'),
-                    single_char_class('b'),
-                    single_char_class('c'),
+                    Parser::parse_single_char('a'),
+                    Parser::parse_single_char('b'),
+                    Parser::parse_single_char('c'),
                 ])),
                 index: 1,
             },
@@ -729,9 +727,9 @@ mod tests {
         let actual = parse("^abc$").unwrap();
         let expect = Ast::Concat(vec![
             Ast::Assertion(Predicate::StartOfLine),
-            single_char_class('a'),
-            single_char_class('b'),
-            single_char_class('c'),
+            Parser::parse_single_char('a'),
+            Parser::parse_single_char('b'),
+            Parser::parse_single_char('c'),
             Ast::Assertion(Predicate::EndOfLine),
         ]);
         assert_eq!(actual, expect);
@@ -748,7 +746,7 @@ mod tests {
     fn test_parse_dot() {
         let actual = parse("a.c").unwrap();
         let expect = Ast::Concat(vec![
-            single_char_class('a'),
+            Parser::parse_single_char('a'),
             Ast::CharClass(CharClass::new(
                 vec![CharRange {
                     start: '\u{0000}',
@@ -756,7 +754,7 @@ mod tests {
                 }],
                 false,
             )),
-            single_char_class('c'),
+            Parser::parse_single_char('c'),
         ]);
         assert_eq!(actual, expect);
     }
@@ -771,23 +769,23 @@ mod tests {
     #[test]
     fn test_parse_escaped_literals() {
         let actual = parse("\\*").unwrap();
-        let expect = single_char_class('*');
+        let expect = Parser::parse_single_char('*');
         assert_eq!(actual, expect);
 
         let actual = parse("\\\\").unwrap();
-        let expect = single_char_class('\\');
+        let expect = Parser::parse_single_char('\\');
         assert_eq!(actual, expect);
 
         let actual = parse("\\+").unwrap();
-        let expect = single_char_class('+');
+        let expect = Parser::parse_single_char('+');
         assert_eq!(actual, expect);
 
         let actual = parse("\\?").unwrap();
-        let expect = single_char_class('?');
+        let expect = Parser::parse_single_char('?');
         assert_eq!(actual, expect);
 
         let actual = parse("\\a").unwrap();
-        let expect = single_char_class('a');
+        let expect = Parser::parse_single_char('a');
         assert_eq!(actual, expect);
     }
 
