@@ -13,6 +13,7 @@ use crate::engine::{
     parser::parse,
 };
 
+pub(crate) use ast::{Ast, extract_must_literals};
 pub use compiler::CompileError;
 pub use evaluator::EvalError;
 pub use instruction::Instruction;
@@ -62,7 +63,8 @@ where
 
 /// Parse and compile a pattern.
 pub fn compile_pattern(pattern: &str) -> Result<Vec<Instruction>, RegexError> {
-    let ast = parse(pattern)?;
+    let ast: Ast = parse(pattern)?;
+    let _must_literals = extract_must_literals(&ast);
     let instructions = compile(&ast)?;
     Ok(instructions)
 }
