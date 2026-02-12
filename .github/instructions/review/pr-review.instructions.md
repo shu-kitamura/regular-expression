@@ -17,8 +17,8 @@ Please focus on the following checklist:
 - Performance considerations addressed
 - Time complexity of algorithms analyzed
 - Licenses of integrated libraries checked
-- Large functions (>50 lines)
-- Large files (>800 lines)
-- Deep nesting (>4 levels)
-- Hardcoded configuration values
-- Magic numbers without explanation
+- No overly large functions (>50 lines)
+- No overly large files (>800 lines)
+- No deeply nested logic (>4 levels)
+- No hardcoded configuration values; configuration is externalized
+- No unexplained magic numbers; constants are named and documented
