@@ -16,7 +16,7 @@ Please focus on the following checklist:
 - Good test coverage
 - Performance considerations addressed
 - Time complexity of algorithms analyzed
-- Licenses of integrated libraries checked
+- Integrated libraries have compatible licenses (no license conflicts in dependencies)
 - No overly large functions (>50 lines)
 - No overly large files (>800 lines)
 - No deeply nested logic (>4 levels)
