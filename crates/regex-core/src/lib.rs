@@ -1,3 +1,5 @@
+use std::collections::BTreeSet;
+
 use engine::Instruction;
 
 mod engine;
@@ -9,6 +11,12 @@ pub struct Regex {
     code: Vec<Instruction>,
     /// Must-have literal substrings used for a fast pre-filter.
     must_literals: Vec<String>,
+    /// Candidate literal substrings used to find likely start positions.
+    needles: Vec<String>,
+    /// Whether this pattern can match the empty string.
+    nullable: bool,
+    /// Whether the instruction stream contains zero-width assertions.
+    has_assertion: bool,
     /// Enables case-insensitive matching by lowercasing pattern/input.
     is_ignore_case: bool,
     /// Inverts the final match result.
@@ -22,15 +30,21 @@ impl Regex {
         is_ignore_case: bool,
         is_invert_match: bool,
     ) -> Result<Self, error::RegexError> {
-        let (code, must_literals) = if is_ignore_case {
-            engine::compile_pattern_with_must_literals(&pattern.to_lowercase())?
+        let (code, analysis) = if is_ignore_case {
+            engine::compile_pattern_with_analysis(&pattern.to_lowercase())?
         } else {
-            engine::compile_pattern_with_must_literals(pattern)?
+            engine::compile_pattern_with_analysis(pattern)?
         };
+        let has_assertion = code
+            .iter()
+            .any(|instruction| matches!(instruction, Instruction::Assert(_)));
 
         Ok(Self {
             code,
-            must_literals,
+            must_literals: analysis.must_literals,
+            needles: analysis.needles,
+            nullable: analysis.nullable,
+            has_assertion,
             is_ignore_case,
             is_invert_match,
         })
@@ -47,8 +61,12 @@ impl Regex {
         Ok(is_match ^ self.is_invert_match)
     }
 
-    /// Matches a line, optionally using a must-literal pre-filter first.
+    /// Matches a line with nullable/must/needle prefilters and a full-eval fallback.
     fn is_match_line(&self, line: &str) -> Result<bool, error::RegexError> {
+        if self.nullable && !self.has_assertion {
+            return Ok(true);
+        }
+
         if !self
             .must_literals
             .iter()
@@ -57,7 +75,50 @@ impl Regex {
             return Ok(false);
         }
 
+        if self.must_literals.is_empty() && !self.needles.is_empty() {
+            let starts = Self::collect_start_positions_from_needles(line, &self.needles);
+            if !starts.is_empty() && engine::match_line_from_starts(&self.code, line, &starts)? {
+                return Ok(true);
+            }
+        }
+
         engine::match_line(&self.code, line)
+    }
+
+    fn collect_start_positions_from_needles(line: &str, needles: &[String]) -> Vec<usize> {
+        let mut byte_starts = BTreeSet::new();
+        for needle in needles {
+            if needle.is_empty() {
+                continue;
+            }
+            for (byte_start, _) in line.match_indices(needle) {
+                byte_starts.insert(byte_start);
+            }
+        }
+
+        if byte_starts.is_empty() {
+            return Vec::new();
+        }
+
+        let mut starts = Vec::with_capacity(byte_starts.len());
+        let mut targets = byte_starts.into_iter().peekable();
+        let mut char_index = 0;
+        for (byte_index, _) in line.char_indices() {
+            while let Some(target) = targets.peek() {
+                if *target == byte_index {
+                    starts.push(char_index);
+                    targets.next();
+                } else {
+                    break;
+                }
+            }
+            if targets.peek().is_none() {
+                break;
+            }
+            char_index += 1;
+        }
+
+        starts
     }
 }
 
@@ -124,9 +185,15 @@ mod tests {
     fn test_extracts_must_literals_for_filtering() {
         let regex = Regex::new(".*abc.*", false, false).unwrap();
         assert_eq!(regex.must_literals, vec!["abc".to_string()]);
+        assert_eq!(regex.needles, vec!["abc".to_string()]);
+        assert!(!regex.nullable);
 
         let regex = Regex::new("ab*c", false, false).unwrap();
         assert_eq!(regex.must_literals, vec!["a".to_string(), "c".to_string()]);
+        assert_eq!(
+            regex.needles,
+            vec!["a".to_string(), "b".to_string(), "c".to_string()]
+        );
     }
 
     #[test]
@@ -154,5 +221,39 @@ mod tests {
         assert!(regex.must_literals.is_empty());
         assert!(regex.is_match("def").unwrap());
         assert!(!regex.is_match("xyz").unwrap());
+    }
+
+    #[test]
+    fn test_nullable_fast_path_without_assertion() {
+        let regex = Regex::new("a*", false, false).unwrap();
+        assert!(regex.nullable);
+        assert!(!regex.has_assertion);
+        assert!(regex.is_match("zzz").unwrap());
+    }
+
+    #[test]
+    fn test_nullable_fast_path_is_guarded_by_assertion() {
+        let regex = Regex::new("^$", false, false).unwrap();
+        assert!(regex.nullable);
+        assert!(regex.has_assertion);
+        assert!(regex.is_match("").unwrap());
+        assert!(!regex.is_match("x").unwrap());
+    }
+
+    #[test]
+    fn test_needles_preferred_search_still_matches() {
+        let regex = Regex::new("(abc|def)", false, false).unwrap();
+        assert!(regex.must_literals.is_empty());
+        assert_eq!(regex.needles, vec!["abc".to_string(), "def".to_string()]);
+        assert!(regex.is_match("xyzdef").unwrap());
+        assert!(!regex.is_match("xyz").unwrap());
+    }
+
+    #[test]
+    fn test_needles_fallback_to_full_scan_preserves_correctness() {
+        let regex = Regex::new("(a|[0-9])", false, false).unwrap();
+        assert!(regex.must_literals.is_empty());
+        assert_eq!(regex.needles, vec!["a".to_string()]);
+        assert!(regex.is_match("5").unwrap());
     }
 }

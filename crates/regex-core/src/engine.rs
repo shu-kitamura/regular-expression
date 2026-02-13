@@ -7,9 +7,13 @@ mod parser;
 
 use thiserror::Error;
 
-use crate::engine::{compiler::compile, evaluator::eval, parser::parse};
+use crate::engine::{
+    compiler::compile,
+    evaluator::{eval, eval_from_starts},
+    parser::parse,
+};
 
-pub(crate) use ast::{Ast, analyze_ast};
+pub(crate) use ast::{Ast, AstAnalysis, analyze_ast};
 pub use compiler::CompileError;
 pub use evaluator::EvalError;
 pub use instruction::Instruction;
@@ -57,13 +61,22 @@ where
     }
 }
 
-/// Parse, extract must literals, and compile a pattern.
-pub(crate) fn compile_pattern_with_must_literals(
+/// Parse, analyze, and compile a pattern.
+pub(crate) fn compile_pattern_with_analysis(
     pattern: &str,
-) -> Result<(Vec<Instruction>, Vec<String>), RegexError> {
+) -> Result<(Vec<Instruction>, AstAnalysis), RegexError> {
     let ast: Ast = parse(pattern)?;
     let analysis = analyze_ast(&ast);
     let instructions = compile(&ast)?;
+    Ok((instructions, analysis))
+}
+
+/// Parse, extract must literals, and compile a pattern.
+#[allow(dead_code)]
+pub(crate) fn compile_pattern_with_must_literals(
+    pattern: &str,
+) -> Result<(Vec<Instruction>, Vec<String>), RegexError> {
+    let (instructions, analysis) = compile_pattern_with_analysis(pattern)?;
     Ok((instructions, analysis.must_literals))
 }
 
@@ -72,11 +85,21 @@ pub fn match_line(code: &[Instruction], line: &str) -> Result<bool, RegexError> 
     Ok(eval(code, line)?)
 }
 
+/// Match an instruction sequence from provided starting character indices.
+pub(crate) fn match_line_from_starts(
+    code: &[Instruction],
+    line: &str,
+    starts: &[usize],
+) -> Result<bool, RegexError> {
+    Ok(eval_from_starts(code, line, starts)?)
+}
+
 #[cfg(test)]
 mod tests {
     use crate::engine::{
-        CompileError, RegexError, compile_pattern_with_must_literals, instruction::Instruction,
-        match_line,
+        CompileError, RegexError, compile_pattern_with_analysis,
+        compile_pattern_with_must_literals, instruction::Instruction, match_line,
+        match_line_from_starts,
     };
 
     #[test]
@@ -106,5 +129,20 @@ mod tests {
     fn test_compile_pattern_with_must_literals() {
         let (_code, must_literals) = compile_pattern_with_must_literals(".*abc.*").unwrap();
         assert_eq!(must_literals, vec!["abc".to_string()]);
+    }
+
+    #[test]
+    fn test_compile_pattern_with_analysis() {
+        let (_code, analysis) = compile_pattern_with_analysis("(abc|def)").unwrap();
+        assert!(analysis.must_literals.is_empty());
+        assert_eq!(analysis.needles, vec!["abc".to_string(), "def".to_string()]);
+        assert!(!analysis.nullable);
+    }
+
+    #[test]
+    fn test_match_line_from_starts() {
+        let (code, _) = compile_pattern_with_must_literals("abc").unwrap();
+        assert!(!match_line_from_starts(&code, "xabc", &[0]).unwrap());
+        assert!(match_line_from_starts(&code, "xabc", &[1]).unwrap());
     }
 }
