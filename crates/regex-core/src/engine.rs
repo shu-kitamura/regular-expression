@@ -9,7 +9,7 @@ use thiserror::Error;
 
 use crate::engine::{compiler::compile, evaluator::eval, parser::parse};
 
-pub(crate) use ast::{Ast, extract_must_literals};
+pub(crate) use ast::{Ast, analyze_ast};
 pub use compiler::CompileError;
 pub use evaluator::EvalError;
 pub use instruction::Instruction;
@@ -62,9 +62,9 @@ pub(crate) fn compile_pattern_with_must_literals(
     pattern: &str,
 ) -> Result<(Vec<Instruction>, Vec<String>), RegexError> {
     let ast: Ast = parse(pattern)?;
-    let must_literals = extract_must_literals(&ast);
+    let analysis = analyze_ast(&ast);
     let instructions = compile(&ast)?;
-    Ok((instructions, must_literals))
+    Ok((instructions, analysis.must_literals))
 }
 
 /// Match an instruction sequence against a line.
