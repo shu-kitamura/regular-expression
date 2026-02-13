@@ -1,5 +1,3 @@
-use std::collections::BTreeSet;
-
 use engine::Instruction;
 
 mod engine;
@@ -9,8 +7,8 @@ pub mod error;
 pub struct Regex {
     /// Compiled instruction sequence.
     code: Vec<Instruction>,
-    /// Literal prefixes used for a fast pre-filter.
-    first_strings: BTreeSet<String>,
+    /// Must-have literal substrings used for a fast pre-filter.
+    must_literals: Vec<String>,
     /// Enables case-insensitive matching by lowercasing pattern/input.
     is_ignore_case: bool,
     /// Inverts the final match result.
@@ -24,17 +22,15 @@ impl Regex {
         is_ignore_case: bool,
         is_invert_match: bool,
     ) -> Result<Self, error::RegexError> {
-        let code = if is_ignore_case {
-            engine::compile_pattern(&pattern.to_lowercase())?
+        let (code, must_literals) = if is_ignore_case {
+            engine::compile_pattern_with_must_literals(&pattern.to_lowercase())?
         } else {
-            engine::compile_pattern(pattern)?
+            engine::compile_pattern_with_must_literals(pattern)?
         };
-
-        let first_strings = Self::get_first_strings(&code);
 
         Ok(Self {
             code,
-            first_strings,
+            must_literals,
             is_ignore_case,
             is_invert_match,
         })
@@ -51,93 +47,18 @@ impl Regex {
         Ok(is_match ^ self.is_invert_match)
     }
 
-    /// Matches a line, optionally using a prefix pre-filter first.
+    /// Matches a line, optionally using a must-literal pre-filter first.
     fn is_match_line(&self, line: &str) -> Result<bool, error::RegexError> {
-        if self.first_strings.is_empty() {
-            return engine::match_line(&self.code, line);
+        if !self
+            .must_literals
+            .iter()
+            .all(|literal| line.contains(literal))
+        {
+            return Ok(false);
         }
 
-        let mut pos = 0;
-        while let Some(i) = find_index(&line[pos..], &self.first_strings) {
-            let start = pos + i;
-            if engine::match_line_from_start(&self.code, &line[start..])? {
-                return Ok(true);
-            }
-            pos = start + 1;
-        }
-
-        Ok(false)
+        engine::match_line(&self.code, line)
     }
-
-    /// Extracts deterministic literal prefixes from the instruction stream.
-    fn get_first_strings(insts: &[Instruction]) -> BTreeSet<String> {
-        let mut first_strings: BTreeSet<String> = BTreeSet::new();
-        match insts.first() {
-            Some(inst) if Self::literal_from_instruction(inst).is_some() => {
-                if let Some(string) = Self::get_string(insts, 0) {
-                    first_strings.insert(string);
-                }
-            }
-            Some(Instruction::Split(left, right)) => {
-                if let Some(string) = Self::get_string(insts, *left) {
-                    first_strings.insert(string);
-                }
-                if let Some(string) = Self::get_string(insts, *right) {
-                    first_strings.insert(string);
-                }
-            }
-            _ => {}
-        }
-        first_strings
-    }
-
-    /// Collects a run of literal characters starting at `start`.
-    fn get_string(insts: &[Instruction], mut start: usize) -> Option<String> {
-        let mut pre: String = String::new();
-
-        while start < insts.len() {
-            let Some(inst) = insts.get(start) else {
-                break;
-            };
-
-            match Self::literal_from_instruction(inst) {
-                Some(c) => {
-                    pre.push(c);
-                    start += 1;
-                }
-                None => break,
-            }
-        }
-
-        if pre.is_empty() { None } else { Some(pre) }
-    }
-
-    /// Returns a literal character when the instruction is a single-char class.
-    fn literal_from_instruction(inst: &Instruction) -> Option<char> {
-        let Instruction::CharClass(class) = inst else {
-            return None;
-        };
-
-        if class.negated || class.ranges.len() != 1 {
-            return None;
-        }
-
-        let range = class.ranges.first()?;
-        if range.start == range.end {
-            Some(range.start)
-        } else {
-            None
-        }
-    }
-}
-
-/// Returns the smallest found index among all candidate strings.
-fn find_index(string: &str, string_set: &BTreeSet<String>) -> Option<usize> {
-    string_set
-        .iter()
-        .map(|s| string.find(s))
-        .filter(|opt| opt.is_some())
-        .min()?
 }
 
 #[cfg(test)]
@@ -200,14 +121,38 @@ mod tests {
     }
 
     #[test]
-    fn test_get_first_strings() {
-        let regex = Regex::new("abc", false, false).unwrap();
-        assert_eq!(regex.first_strings.len(), 1);
-        assert!(regex.first_strings.contains("abc"));
+    fn test_extracts_must_literals_for_filtering() {
+        let regex = Regex::new(".*abc.*", false, false).unwrap();
+        assert_eq!(regex.must_literals, vec!["abc".to_string()]);
 
-        let regex = Regex::new("a*bc", false, false).unwrap();
-        assert_eq!(regex.first_strings.len(), 2);
-        assert!(regex.first_strings.contains("a"));
-        assert!(regex.first_strings.contains("bc"));
+        let regex = Regex::new("ab*c", false, false).unwrap();
+        assert_eq!(regex.must_literals, vec!["a".to_string(), "c".to_string()]);
+    }
+
+    #[test]
+    fn test_must_literal_filter_skips_non_matching_lines() {
+        let regex = Regex::new(".*abc.*", false, false).unwrap();
+        assert!(!regex.is_match("zzz").unwrap());
+    }
+
+    #[test]
+    fn test_must_literal_filter_allows_matching_lines() {
+        let regex = Regex::new("a.*c", false, false).unwrap();
+        assert!(regex.is_match("a---c").unwrap());
+        assert!(!regex.is_match("a---").unwrap());
+    }
+
+    #[test]
+    fn test_must_literal_filter_respects_invert_match() {
+        let regex = Regex::new(".*abc.*", false, true).unwrap();
+        assert!(regex.is_match("zzz").unwrap());
+    }
+
+    #[test]
+    fn test_empty_must_literals_still_runs_matcher() {
+        let regex = Regex::new("(abc|def)", false, false).unwrap();
+        assert!(regex.must_literals.is_empty());
+        assert!(regex.is_match("def").unwrap());
+        assert!(!regex.is_match("xyz").unwrap());
     }
 }

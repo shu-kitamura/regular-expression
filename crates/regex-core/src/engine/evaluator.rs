@@ -251,15 +251,6 @@ fn eval_from_start_inner(
     Ok(false)
 }
 
-/// Evaluates whether `input` matches from the first character.
-pub fn eval_from_start(inst: &[Instruction], input: &str) -> Result<bool, EvalError> {
-    let chars: Vec<char> = input.chars().collect();
-    let capture_slots = max_capture_index(inst)
-        .checked_add(1)
-        .ok_or(EvalError::PCOverFlow)?;
-    eval_from_start_inner(inst, &chars, 0, capture_slots)
-}
-
 /// Evaluates whether `input` matches at any starting position.
 pub fn eval(inst: &[Instruction], input: &str) -> Result<bool, EvalError> {
     let chars: Vec<char> = input.chars().collect();
@@ -281,7 +272,7 @@ mod tests {
     use crate::engine::{
         ast::{CharClass, CharRange, Predicate},
         compiler::compile,
-        evaluator::{EvalError, eval, eval_from_start},
+        evaluator::{EvalError, eval},
         instruction::Instruction,
         parser::parse,
     };
@@ -349,13 +340,5 @@ mod tests {
         let inst = vec![Instruction::Jump(10)];
         let actual = eval(&inst, "abc");
         assert_eq!(actual, Err(EvalError::InvalidPC));
-    }
-
-    #[test]
-    fn test_eval_from_start() {
-        let ast = parse("abc").unwrap();
-        let inst = compile(&ast).unwrap();
-        assert!(eval_from_start(&inst, "abcxxx").unwrap());
-        assert!(!eval_from_start(&inst, "xabc").unwrap());
     }
 }

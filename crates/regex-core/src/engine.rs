@@ -7,11 +7,7 @@ mod parser;
 
 use thiserror::Error;
 
-use crate::engine::{
-    compiler::compile,
-    evaluator::{eval, eval_from_start},
-    parser::parse,
-};
+use crate::engine::{compiler::compile, evaluator::eval, parser::parse};
 
 pub(crate) use ast::{Ast, extract_must_literals};
 pub use compiler::CompileError;
@@ -61,12 +57,14 @@ where
     }
 }
 
-/// Parse and compile a pattern.
-pub fn compile_pattern(pattern: &str) -> Result<Vec<Instruction>, RegexError> {
+/// Parse, extract must literals, and compile a pattern.
+pub(crate) fn compile_pattern_with_must_literals(
+    pattern: &str,
+) -> Result<(Vec<Instruction>, Vec<String>), RegexError> {
     let ast: Ast = parse(pattern)?;
-    let _must_literals = extract_must_literals(&ast);
+    let must_literals = extract_must_literals(&ast);
     let instructions = compile(&ast)?;
-    Ok(instructions)
+    Ok((instructions, must_literals))
 }
 
 /// Match an instruction sequence against a line.
@@ -74,28 +72,23 @@ pub fn match_line(code: &[Instruction], line: &str) -> Result<bool, RegexError> 
     Ok(eval(code, line)?)
 }
 
-/// Match an instruction sequence from the start of a line.
-pub fn match_line_from_start(code: &[Instruction], line: &str) -> Result<bool, RegexError> {
-    Ok(eval_from_start(code, line)?)
-}
-
 #[cfg(test)]
 mod tests {
     use crate::engine::{
-        CompileError, RegexError, compile_pattern, instruction::Instruction, match_line,
-        match_line_from_start,
+        CompileError, RegexError, compile_pattern_with_must_literals, instruction::Instruction,
+        match_line,
     };
 
     #[test]
     fn test_compile_pattern_literal() {
-        let code = compile_pattern("abc").unwrap();
+        let (code, _) = compile_pattern_with_must_literals("abc").unwrap();
         assert_eq!(code.len(), 4);
         assert!(matches!(code.last(), Some(Instruction::Match)));
     }
 
     #[test]
     fn test_compile_pattern_invalid_backreference() {
-        let actual = compile_pattern("(a)\\2");
+        let actual = compile_pattern_with_must_literals("(a)\\2");
         assert_eq!(
             actual,
             Err(RegexError::Compile(CompileError::InvalidBackreference(2)))
@@ -104,15 +97,14 @@ mod tests {
 
     #[test]
     fn test_match_line_backreference() {
-        let code = compile_pattern("(abc)\\1").unwrap();
+        let (code, _) = compile_pattern_with_must_literals("(abc)\\1").unwrap();
         assert!(match_line(&code, "abcabc").unwrap());
         assert!(!match_line(&code, "abcabd").unwrap());
     }
 
     #[test]
-    fn test_match_line_from_start() {
-        let code = compile_pattern("abc").unwrap();
-        assert!(match_line_from_start(&code, "abcdef").unwrap());
-        assert!(!match_line_from_start(&code, "zabc").unwrap());
+    fn test_compile_pattern_with_must_literals() {
+        let (_code, must_literals) = compile_pattern_with_must_literals(".*abc.*").unwrap();
+        assert_eq!(must_literals, vec!["abc".to_string()]);
     }
 }
