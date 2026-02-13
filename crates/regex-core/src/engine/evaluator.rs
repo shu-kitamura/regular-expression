@@ -251,13 +251,27 @@ fn eval_from_start_inner(
     Ok(false)
 }
 
-/// Evaluates whether `input` matches from the first character.
-pub fn eval_from_start(inst: &[Instruction], input: &str) -> Result<bool, EvalError> {
+/// Evaluates whether `input` matches from any start index in `starts`.
+pub(crate) fn eval_from_starts(
+    inst: &[Instruction],
+    input: &str,
+    starts: &[usize],
+) -> Result<bool, EvalError> {
     let chars: Vec<char> = input.chars().collect();
     let capture_slots = max_capture_index(inst)
         .checked_add(1)
         .ok_or(EvalError::PCOverFlow)?;
-    eval_from_start_inner(inst, &chars, 0, capture_slots)
+
+    for start in starts {
+        if *start > chars.len() {
+            continue;
+        }
+        if eval_from_start_inner(inst, &chars, *start, capture_slots)? {
+            return Ok(true);
+        }
+    }
+
+    Ok(false)
 }
 
 /// Evaluates whether `input` matches at any starting position.
@@ -281,7 +295,7 @@ mod tests {
     use crate::engine::{
         ast::{CharClass, CharRange, Predicate},
         compiler::compile,
-        evaluator::{EvalError, eval, eval_from_start},
+        evaluator::{EvalError, eval, eval_from_starts},
         instruction::Instruction,
         parser::parse,
     };
@@ -352,10 +366,11 @@ mod tests {
     }
 
     #[test]
-    fn test_eval_from_start() {
+    fn test_eval_from_starts_uses_only_provided_positions() {
         let ast = parse("abc").unwrap();
         let inst = compile(&ast).unwrap();
-        assert!(eval_from_start(&inst, "abcxxx").unwrap());
-        assert!(!eval_from_start(&inst, "xabc").unwrap());
+
+        assert!(!eval_from_starts(&inst, "xabc", &[0]).unwrap());
+        assert!(eval_from_starts(&inst, "xabc", &[1]).unwrap());
     }
 }
