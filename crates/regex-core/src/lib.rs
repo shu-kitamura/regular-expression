@@ -102,8 +102,7 @@ impl Regex {
 
         let mut starts = Vec::with_capacity(byte_starts.len());
         let mut targets = byte_starts.into_iter().peekable();
-        let mut char_index = 0;
-        for (byte_index, _) in line.char_indices() {
+        for (char_index, (byte_index, _)) in line.char_indices().enumerate() {
             while let Some(target) = targets.peek() {
                 if *target == byte_index {
                     starts.push(char_index);
@@ -115,7 +114,6 @@ impl Regex {
             if targets.peek().is_none() {
                 break;
             }
-            char_index += 1;
         }
 
         starts
